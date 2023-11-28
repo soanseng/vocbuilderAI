@@ -1,0 +1,7 @@
+# gitignore for python anki addon  
+.env
+libs
+__pycache__
+*.log
+.pytest_cache
+poetry.lock
