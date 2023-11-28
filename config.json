@@ -1,0 +1,11 @@
+{
+    "openai_api_key": "1234",
+    "openai_model": "tts-1",
+    "default_deck": "Big",
+    "default_tag": "vocabulary::wordoftheday",
+    "note_type": "vocbuilderAI",
+    "model": "gpt-3.5-turbo-1106",
+    "max_tokens": 15000,
+    "temperature": 0.5,
+    "speech_voice": "alloy"
+}
