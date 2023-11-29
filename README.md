@@ -1,6 +1,7 @@
 # VocabBuilderAI for Anki
 
 ## Description:
+[Taiwan language version](README_ZH_TW.md)
 VocabBuilderAI is an Anki add-on designed to enhance vocabulary learning by leveraging OpenAI's GPT-3.5 Turbo and Whisper APIs. It allows users to generate detailed notes for new vocabulary words, complete with definitions, pronunciations, etymologies, synonyms, antonyms, and real-world examples.
 
 ## Features:
@@ -32,7 +33,9 @@ VocabBuilderAI is an Anki add-on designed to enhance vocabulary learning by leve
 ## Support:
 For support, questions, or feature requests, please visit the GitHub repository or contact the add-on author.
 ## TODO
-- [ ] in adding note page, user can click a icon, and add vocabulary then click TAB to generate content
 - [ ] add japanese vocabulary learning
 - [ ] at installation, check there is a vocbuilderAI note type or not, creating it for users automatically
 - [ ] use git submodule to load into libs for necessary packages
+- [ ] check this word is repeated? if repeated add tags or rewrite its content or not
+- [ ] after adding voice to anki, delete it on the addon folder
+- [ ] add type to it for better development
