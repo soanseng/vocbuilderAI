@@ -29,19 +29,25 @@ def generate_speech(vocab_word):
     # Generate a hash of the vocabulary word
     hashed_vocab = hashlib.md5(vocab_word.encode()).hexdigest()
 
-    # Define the path for the speech file
-    speech_file_path = Path(__file__).parent / f"whisper-{hashed_vocab}.mp3"
+    # Temporary file path for the speech file
+    temp_file_path = Path(__file__).parent / f"whisper-{hashed_vocab}.mp3"
 
     # get info from config
-    voice = config.get("speech_voice", "alloy")
+    voice = config.get("speech_voice", "nova")
 
     # Generate the speech
     response = client.audio.speech.create(model="tts-1", voice=voice, input=vocab_word)
 
     # Save the speech file
-    response.stream_to_file(speech_file_path)
+    response.stream_to_file(temp_file_path)
 
-    return speech_file_path
+    # copy to media folder
+    final_file_name = mw.col.media.addFile(str(temp_file_path))
+
+    # remove the temp file
+    temp_file_path.unlink(missing_ok=True)
+
+    return final_file_name
 
 
 def format_vocabulary_html(word):
@@ -123,16 +129,13 @@ def add_note_to_deck(deck_name, tag_name, note_data):
 
     # generate sound and save to note
     speech_file_path = generate_speech(note_data["word"])
-    # Copy the speech file to Anki's media folder
-    mw.col.media.addFile(speech_file_path)
 
     # Create a new note
     note = Note(mw.col, model)
     note["vocabulary"] = format_vocabulary_html(note_data["word"])
     note["Pronunciations"] = format_pronunciations_html(note_data["pronunciation"])
     note["Sound"] = (
-        format_sound_html(note_data["soundLink"])
-        + f"<br> [sound:{speech_file_path.name}] "
+        format_sound_html(note_data["soundLink"]) + f"<br> [sound:{speech_file_path}] "
     )
     note["detail defination"] = format_meanings_html(
         note_data["meanings"]
@@ -339,7 +342,7 @@ def on_add_note(editor: Editor):
             )
             editor.note["Sound"] = (
                 format_sound_html(note_data["soundLink"])
-                + f"<br>[sound:{generate_speech(note_data['word']).name}]"
+                + f"<br>[sound:{generate_speech(note_data['word'])}]"
             )
             editor.note["detail defination"] = format_meanings_html(
                 note_data["meanings"]

@@ -12,11 +12,16 @@ VocabBuilderAI is an Anki add-on designed to enhance vocabulary learning by leve
     - User-friendly interface integrated into Anki's Add Note window.
 
 ## Installation:
-
-    - Download the add-on from the AnkiWeb or GitHub repository.
     - Install it in Anki using the provided code or installation file.
     - Configure the add-on settings, including the OpenAI API key, in Anki's Add-on menu.
-
+### Node Type
+create a node type called "vocbuilderAI" with following fields:
+  - vocabulary
+  - detail defination
+  - Pronunciations
+  - Sound
+  - Etymology, Synonyms and Antonyms
+  - Real-world examples
 ## Usage:
 
     - Open the Add Note window in Anki.
@@ -37,5 +42,4 @@ For support, questions, or feature requests, please visit the GitHub repository 
 - [ ] at installation, check there is a vocbuilderAI note type or not, creating it for users automatically
 - [ ] use git submodule to load into libs for necessary packages
 - [ ] check this word is repeated? if repeated add tags or rewrite its content or not
-- [ ] after adding voice to anki, delete it on the addon folder
 - [ ] add type to it for better development
