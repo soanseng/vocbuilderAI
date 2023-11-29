@@ -16,7 +16,14 @@ VocabBuilderAI 是一款專為 Anki 設計的擴充功能，透過整合 OpenAI 
     - 從 AnkiWeb 或 GitHub 下載。
     - 使用提供的代碼或安裝文件在 Anki 中安裝。
     - 在 Anki 的擴充功能選單中配置擴充功能設定，包括 OpenAI API 金鑰。
-
+### 你需要自己建立"Node type"
+ node type 的名字叫 "vocbuilderAI" 要有以下欄位(大小寫、空格都要一樣):
+  - vocabulary
+  - detail defination
+  - Pronunciations
+  - Sound
+  - Etymology, Synonyms and Antonyms
+  - Real-world examples
 ## 使用方法：
 
     - 在 Anki 中打開新增記憶卡片窗口。
