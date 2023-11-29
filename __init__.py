@@ -1,4 +1,7 @@
-from aqt import mw
+from platform import node
+from aqt import mw, gui_hooks
+from aqt.gui_hooks import editor_did_init_buttons
+from aqt.editor import Editor
 from aqt.utils import showInfo
 from aqt.qt import *
 from anki.notes import Note
@@ -283,26 +286,98 @@ def clean_response(response):
     return response.strip()
 
 
+def process_response(response):
+    cleaned_response = clean_response(response)
+    try:
+        return json.loads(cleaned_response)
+    except json.JSONDecodeError as e:
+        showInfo(f"Failed to parse note data: {e}\nContent: {cleaned_response}")
+        return None
+
+
 def get_vocab_word():
     word, ok = QInputDialog.getText(
         mw, "VocabBuilderAI", "Enter a new vocabulary word:"
     )
     if ok and word:
         response = generate_vocab_note(word)
-        cleaned_response = clean_response(response)
-        try:
-            note_data = json.loads(cleaned_response)
-            deck_name = get_deck_name()
-            tag_name = get_tag_name()
-            if deck_name and tag_name:
-                add_note_to_deck(deck_name, tag_name, note_data)
-                showInfo(f"Note added to deck '{deck_name}'")
-            else:
-                showInfo("No deck selected. Note was not added.")
-        except json.JSONDecodeError as e:
-            showInfo(f"Failed to parse note data: {e}\nContent: {cleaned_response}")
-            print(f"Error parsing JSON: {e}\nContent: {cleaned_response}")
-            traceback.print_exc()  # This will print the full traceback to the console
+        note_data = process_response(response)
+        deck_name = get_deck_name()
+        tag_name = get_tag_name()
+        if deck_name and tag_name:
+            add_note_to_deck(deck_name, tag_name, note_data)
+            showInfo(f"Note added to deck '{deck_name}'")
+        else:
+            showInfo("No deck selected. Note was not added.")
+
+
+# "add note" window
+def on_add_note(editor: Editor):
+    vocab_word = editor.note.fields[0]  # Assumes the first field is 'vocabulary'
+
+    if not vocab_word:
+        showInfo(
+            "No vocabulary word entered. Please enter a word in the 'vocabulary' field."
+        )
+        return
+    try:
+        response = generate_vocab_note(vocab_word)
+        note_data = process_response(response)
+
+        if not isinstance(note_data, dict):
+            showInfo(
+                "Failed to generate note content. Please check your API key and Network."
+            )
+            return
+
+        # Check if note_data is a dictionary and has necessary keys
+        if isinstance(note_data, dict):
+            # Populate the fields in the editor
+            editor.note["vocabulary"] = format_vocabulary_html(note_data["word"])
+            editor.note["Pronunciations"] = format_pronunciations_html(
+                note_data["pronunciation"]
+            )
+            editor.note["Sound"] = (
+                format_sound_html(note_data["soundLink"])
+                + f"<br>[sound:{generate_speech(note_data['word']).name}]"
+            )
+            editor.note["detail defination"] = format_meanings_html(
+                note_data["meanings"]
+            ) + format_definitions_html(note_data["definitions"])
+            editor.note["Etymology, Synonyms and Antonyms"] = (
+                format_etymology_html(note_data["etymology"])
+                + format_synonyms_html(note_data["synonyms"])
+                + format_antonyms_html(note_data["antonyms"])
+            )
+            editor.note["Real-world examples"] = format_examples_html(
+                note_data["word"], note_data["realWorldExamples"]
+            )
+            # Update the editor to reflect these changes
+            editor.loadNote()
+    except Exception as e:
+        showInfo(f"Error: {e}")
+        return
+
+
+def add_action_button(buttons, editor: Editor):
+    icon_path = None
+    action = QAction("Generate Content", editor.widget)
+    action.triggered.connect(lambda _, e=editor: on_add_note(e))
+    # editor._links["generate_vocab_content"] = lambda _, e=editor: on_add_note(e)
+
+    button = editor.addButton(
+        icon=None,  # if icon_path is None else QIcon(icon_path),
+        label="VocAI",  # None if icon_path is not None else "Generate",
+        cmd="generate_vocab_content",
+        func=lambda _, e=editor: on_add_note(e),
+        tip="Generate content for vocabulary",
+        keys=None,
+    )
+    buttons.append(button)
+    return buttons
+
+
+gui_hooks.editor_did_init_buttons.append(add_action_button)
 
 
 def vocab_builder_ai():
