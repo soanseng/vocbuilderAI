@@ -1,8 +1,9 @@
 {
-    "package": "vocbuilderai",
     "name": "VocBuilderAI",
-    "description": "VocBuilderAI is an Anki add-on designed to enhance vocabulary learning by leveraging OpenAI's GPT-3.5 Turbo and Whisper APIs.",
-    "keywords": ["vocabulary", "AI", "OpenAI"],
-    "author": "Soanseng",
-    "version": "0.1",
+    "package": "voc_builder_ai",
+    "description": "An add-on to enhance vocabulary learning using OpenAI's API.",
+    "keywords": ["vocabulary", "learning", "AI"],
+    "author": "soanseng",
+    "version": "1.0",
+    "min_point_version": 41
 }

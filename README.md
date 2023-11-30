@@ -4,6 +4,8 @@
 [Taiwan language version](README_ZH_TW.md)
 VocabBuilderAI is an Anki add-on designed to enhance vocabulary learning by leveraging OpenAI's GPT-3.5 Turbo and Whisper APIs. It allows users to generate detailed notes for new vocabulary words, complete with definitions, pronunciations, etymologies, synonyms, antonyms, and real-world examples.
 
+- ![](media/dictionary.png)
+- ![](media/webster.png)
 ## Features:
     - Generate comprehensive vocabulary notes.
     - Integrate with OpenAI's GPT-3.5 Turbo for detailed definitions and examples.
@@ -11,6 +13,7 @@ VocabBuilderAI is an Anki add-on designed to enhance vocabulary learning by leve
     - Customizable settings for default deck, note type, and tags.
     - User-friendly interface integrated into Anki's Add Note window.
 
+![demo](media/vocAI-demo-1.gif)
 ## Installation:
     - Install it in Anki using the provided code or installation file.
     - Configure the add-on settings, including the OpenAI API key, in Anki's Add-on menu.
@@ -27,6 +30,10 @@ create a node type called "vocbuilderAI" with following fields:
     - Open the Add Note window in Anki.
     - Click on the "VocabBuilderAI" button or menu item.
     - Enter a new vocabulary word and the add-on will generate the complete note.
+
+  ![screenshot1](media/sceenshot-1.png)
+  ![screenshot2](media/sceenshot-2.png)
+  ![screenshot3](media/sceenshot-3.png)
 
 ## Configuration:
 
