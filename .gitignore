@@ -1,7 +1,11 @@
-# gitignore for python anki addon  
 .env
 libs_backup
 __pycache__
 *.log
 .pytest_cache
 poetry.lock
+pyproject.toml
+.vscode
+tests
+.DS_Store
+

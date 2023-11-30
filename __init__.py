@@ -73,16 +73,21 @@ def format_meanings_html(meanings):
 def format_definitions_html(definitions):
     html_content = "<h3>Definitions:</h3><ol>"
     for definition in definitions:
-        html_content += f"<li><b>{definition['text']}</b>"
-        if "grammaticalInfo" in definition:
-            grammatical_info = definition["grammaticalInfo"]
-            if "partOfSpeech" in grammatical_info:
-                html_content += f" <i>({grammatical_info['partOfSpeech']})</i>"
+        html_content += f"<li><b>{definition.get('text', 'No definition')}</b>"
 
-            if "forms" in grammatical_info:
+        grammatical_info = definition.get("grammaticalInfo")
+        if grammatical_info:
+            part_of_speech = grammatical_info.get("partOfSpeech")
+            if part_of_speech:
+                html_content += f" <i>({part_of_speech})</i>"
+
+            forms = grammatical_info.get("forms")
+            if forms:
                 html_content += "<ul>"
-                for form, values in grammatical_info["forms"].items():
-                    html_content += f"<li><b>{form.capitalize()}:</b> {values}</li>"
+                for form, values in forms.items():
+                    # Join multiple form values into a string
+                    values_str = ", ".join(values)
+                    html_content += f"<li><b>{form.capitalize()}:</b> {values_str}</li>"
                 html_content += "</ul>"
         html_content += "</li>"
     html_content += "</ol>"
