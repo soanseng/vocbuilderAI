@@ -1,8 +1,8 @@
-# VocabBuilderAI for Anki
+# VocBuilderAI for Anki
 
 ## Description:
 [Taiwan language version](README_ZH_TW.md)
-VocabBuilderAI is an Anki add-on designed to enhance vocabulary learning by leveraging OpenAI's GPT-3.5 Turbo and Whisper APIs. It allows users to generate detailed notes for new vocabulary words, complete with definitions, pronunciations, etymologies, synonyms, antonyms, and real-world examples.
+VocBuilderAI is an Anki add-on designed to enhance vocabulary learning by leveraging OpenAI's GPT-3.5 Turbo and Whisper APIs. It allows users to generate detailed notes for new vocabulary words, complete with definitions, pronunciations, etymologies, synonyms, antonyms, and real-world examples.
 
 - ![](media/dictionary.png)
 - ![](media/webster.png)

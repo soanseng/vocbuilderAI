@@ -1,3 +1,4 @@
+import html
 from platform import node
 from aqt import mw, gui_hooks
 from aqt.gui_hooks import editor_did_init_buttons
@@ -11,6 +12,7 @@ import json
 from pathlib import Path
 import hashlib
 import traceback
+import re
 
 
 # path to the libs folder
@@ -105,11 +107,10 @@ def format_synonyms_html(synonyms):
     html_content += "</ol><br>"
     return html_content
 
-
 def format_antonyms_html(antonyms):
     html_content = "<h3>Antonyms:</h3><ol>"
-    for antonyms in antonyms:
-        html_content += f"<li>{antonyms}</li>"
+    for antonym in antonyms:
+        html_content += f"<li>{antonym}</li>"
     html_content += "</ol><br>"
     return html_content
 
@@ -122,6 +123,104 @@ def format_examples_html(vocab_word, examples):
     html_content += "</ul>"
     return html_content
 
+# format for japanese vocab
+# {
+#   "vocabulary": "近い",
+#   "kanji": "近い",
+#   "furigana": "ちかい",
+#   "pitchPattern": "0",
+#   "pronunciations": "chikai",
+#   "explanations": {
+#     "en-US": "near, close",
+#     "zh-TW": "近的"
+#   },
+#   "partsOfSpeech": "adjective",
+#   "grammaticalRules": {
+#     "adjectives": {
+#       "NegativeForm": "近くない",
+#       "PastPositiveForm": "近かった",
+#       "PastNegativeForm": "近くなかった",
+#       "TeForm": "近くて"
+#     }
+#   },
+#   "sound": "https://forvo.com/word/近い/#ja",
+#   "exampleSentences": [
+#     {"sentence": "この家は駅に近いです。", "translation": "這個房子離車站很近。"},
+#     {"sentence": "彼は私の近い友達です。", "translation": "他是我親近的朋友。"},
+#     {"sentence": "近い将来に旅行したいです。", "translation": "我想在不久的將來旅行。"},
+#     {"sentence": "彼女は近い将来に結婚する予定です。", "translation": "她計劃在不久的將來結婚。"},
+#     {"sentence": "この店は近い将来に閉店する予定です。", "translation": "這家店計劃在不久的將來關閉。"}
+#   ]
+# }
+def format_kanji_html(kanji):
+    html_content = "<h3>Kanji:</h3>"
+    html_content += f"<p>{kanji}</p>"
+    return html_content
+def format_furigana_html(furigana):
+    html_content = "<h3>Furigana:</h3>"
+    html_content += f"<p>{furigana}</p>"
+    return html_content
+def format_pitchPattern_html(pitchPattern):
+    html_content = "<h3>Pitch Pattern:</h3>"
+    html_content += f"<p>{pitchPattern}</p>"
+    return html_content
+def format_explanations_html(explanations):
+    html_content = "<h3>Explanations:</h3>"
+    html_content += f"<p>en-US: {explanations['en-US']}</p>"
+    html_content += f"<p>zh-TW: {explanations['zh-TW']}</p>"
+    return html_content
+def format_partsOfSpeech_html(partsOfSpeech):
+    html_content = "<h3>Parts of Speech:</h3>"
+    html_content += f"<p>{partsOfSpeech}</p>"
+    return html_content
+def format_grammaticalRules_html(grammaticalRules: dict):
+    # "grammaticalRules": {
+    # "verbs": {},
+    # "adjectives": {},
+    # "nouns": {
+    #   "Variations": "遅刻する (to be late); 遅刻者 (latecomer)",
+    #   "Examples": "彼はいつも遅刻する。\nHe is always late.\n他の人よりも遅刻することが多い。\nHe is late more often than others.\n彼は遅刻者だ。\nHe is a latecomer."
+    # }
+    # the json is been parsed by `process_response` into a dict, sometimes the verb, adjective, noun is empty
+    html_content = "<h3>Grammatical Rules:</h3>"
+
+    if grammaticalRules.get("verbs"):
+        html_content += "<h4>verbs:</h4>"
+        html_content += f"<p>PlainForm: {grammaticalRules['verbs']['PlainForm']}</p>"
+        html_content += f"<p>PoliteForm: {grammaticalRules['verbs']['PoliteForm']}</p>"
+        html_content += f"<p>NegativeForm: {grammaticalRules['verbs']['NegativeForm']}</p>"
+        html_content += f"<p>PastTense: {grammaticalRules['verbs']['PastTense']}</p>"
+        html_content += f"<p>TeForm: {grammaticalRules['verbs']['TeForm']}</p>"
+        html_content += f"<p>PotentialForm: {grammaticalRules['verbs']['PotentialForm']}</p>"
+        html_content += f"<p>CausativeForm: {grammaticalRules['verbs']['CausativeForm']}</p>"
+        html_content += f"<p>PassiveForm: {grammaticalRules['verbs']['PassiveForm']}</p>"
+    if grammaticalRules.get("adjectives"):
+        html_content += "<h4>adjectives:</h4>"
+        html_content += f"<p>NegativeForm: {grammaticalRules['adjectives']['NegativeForm']}</p>"
+        html_content += f"<p>PastPositiveForm: {grammaticalRules['adjectives']['PastPositiveForm']}</p>"
+        html_content += f"<p>PastNegativeForm: {grammaticalRules['adjectives']['PastNegativeForm']}</p>"
+        html_content += f"<p>TeForm: {grammaticalRules['adjectives']['TeForm']}</p>"
+    if grammaticalRules.get("nouns"):
+        html_content += "<h4>nouns:</h4>"
+        html_content += f"<p>Variations: {grammaticalRules['nouns']['Variations']}</p>"
+        # break the line in examples to unordered list
+        html_content += "<ul>"
+        for example in grammaticalRules['nouns']['Examples'].split("\n"):
+            html_content += f"<li>{example}</li>"
+    if grammaticalRules.get("others"):
+        html_content += "<h4>others:</h4>"
+        html_content += f"<p>others: {grammaticalRules['others']}</p>"
+    #error handling
+    if not grammaticalRules.get("verbs") and not grammaticalRules.get("adjectives") and not grammaticalRules.get("nouns") and not grammaticalRules.get("others"):
+        html_content += "<p>No grammatical rules found.</p>"
+    return html_content
+
+def format_exampleSentences_html(exampleSentences):
+    html_content = "<h3>Example Sentences:</h3><ol>"
+    for exampleSentence in exampleSentences:
+        html_content += f"<li><strong>{exampleSentence.get('sentence')}</strong> - {exampleSentence.get('translation')}</li>"
+        html_content += "</ol>"
+    return html_content
 
 def add_note_to_deck(deck_name, tag_name, note_data):
     # Ensure the deck exists, or create it
@@ -186,6 +285,27 @@ def get_deck_name(default_deck="Big"):
         False,
     )
     return deck_name if ok and deck_name else default_deck
+
+def is_japanese_vocab(vocab_word):
+
+    """
+    Determine if a given word is Japanese based on character set analysis.
+
+    Args:
+    word (str): The word to be analyzed.
+
+    Returns:
+    bool: True if the word is Japanese, False otherwise.
+    """
+    # Regular expression pattern for matching Japanese characters (Kanji, Hiragana, Katakana)
+    japanese_char_pattern = r'[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]'
+
+    # Check if the word contains any Japanese characters
+    if re.search(japanese_char_pattern, vocab_word):
+        return True
+    else:
+        return False
+
 
 
 def generate_vocab_note(vocab_word):
@@ -258,10 +378,75 @@ Format the JSON object as follows:
   ]
 }
     """
+    JPY_PROMPT = """
+When a user provides a Japanese vocabulary word, your task is to create a detailed dictionary entry in JSON format. First, identify whether the word is a verb, adjective, or noun. Then, based on its part of speech, generate the appropriate forms and information.
+
+Include the following in the JSON response:
+1. **Kanji**: The Kanji representation.
+2. **Furigana**: Furigana reading.
+3. **Pitch Pattern**: Pitch accent pattern.
+4. **Pronunciations**: Pronunciations using English words for comparison.
+5. **Explanations**: Meanings in English (en-US) and Traditional Chinese (zh-TW).
+6. **Parts of Speech**: The part of speech (verb, adjective, noun).
+7. **Grammatical Rules and Examples**: 
+   - For verbs: Include Plain form, Polite form, Negative form, Past tense, Te-form, Potential form, Causative form, and Passive form.
+   - For adjectives: Include Negative Form, Past Positive Form, Past Negative Form, and Te-Form.
+   - For nouns: Detail any variations or compound forms, including common expressions or idiomatic uses.
+8. **Sound**: Link to pronunciation on Forvo.
+9. **Example Sentences**: Supply 5 sentences featuring the vocabulary, each with a translation in Traditional Chinese.
+
+Format your reply as follows:
+
+```json
+{
+  "vocabulary": "{Vocabulary word}",
+  "kanji": "{Kanji representation}",
+  "furigana": "{Furigana reading}",
+  "pitchPattern": "{Pitch accent pattern}",
+  "pronunciations": "{Pronunciation in English terms}",
+  "explanations": {
+    "en-US": "{English explanation}",
+    "zh-TW": "{Traditional Chinese explanation}"
+  },
+  "partsOfSpeech": "{Verb/Adjective/Noun}",
+  "grammaticalRules": {
+    "verbs": {
+      "PlainForm": "...",
+      "PoliteForm": "...",
+      "NegativeForm": "...",
+      "PastTense": "...",
+      "TeForm": "...",
+      "PotentialForm": "...",
+      "CausativeForm": "...",
+      "PassiveForm": "..."
+    },
+    "adjectives": {
+      "NegativeForm": "...",
+      "PastPositiveForm": "...",
+      "PastNegativeForm": "...",
+      "TeForm": "..."
+    },
+    "nouns": {
+      "Variations": "...",
+      "Examples": "..."
+    }
+  },
+  "sound": "https://forvo.com/word/{vocabulary}/#ja",
+  "exampleSentences": [
+    {"sentence": "{Sentence 1}", "translation in zh-tw": "{Translation 1}"},
+    {"sentence": "{Sentence 2}", "translation": "{Translation 2}"},
+    {"sentence": "{Sentence 3}", "translation": "{Translation 3}"},
+    {"sentence": "{Sentence 4}", "translation": "{Translation 4}"},
+    {"sentence": "{Sentence 5}", "translation": "{Translation 5}"}
+  ]
+}
+```
+Only reply in JSON format.
+"""
     # get info from config
     model = config.get("model", "gpt-3.5-turbo-1106")
-    temperature = config.get("temperature", 0.5)
-    max_tokens = config.get("max_tokens", 4096)
+    temperature = config.get("temperature", 0.2)
+    max_tokens = config.get("max_tokens", 15000)
 
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -270,7 +455,7 @@ Format the JSON object as follows:
             messages=[
                 {
                     "role": "system",
-                    "content": VOC_PROMPT,
+                    "content": VOC_PROMPT if not is_japanese_vocab(vocab_word) else JPY_PROMPT, 
                 },
                 {"role": "user", "content": f"{vocab_word}"},
             ],
@@ -339,7 +524,7 @@ def on_add_note(editor: Editor):
             return
 
         # Check if note_data is a dictionary and has necessary keys
-        if isinstance(note_data, dict):
+        if isinstance(note_data, dict) and not is_japanese_vocab(vocab_word):
             # Populate the fields in the editor
             editor.note["vocabulary"] = format_vocabulary_html(note_data["word"])
             editor.note["Pronunciations"] = format_pronunciations_html(
@@ -361,6 +546,22 @@ def on_add_note(editor: Editor):
                 note_data["word"], note_data["realWorldExamples"]
             )
             # Update the editor to reflect these changes
+            editor.loadNote()
+        if isinstance(note_data, dict) and is_japanese_vocab(vocab_word):
+            # Populate the fields in the editor
+            editor.note["vocabulary"] = format_vocabulary_html(note_data["vocabulary"])
+            editor.note["Pronunciations"] = format_partsOfSpeech_html(note_data["partsOfSpeech"]) + format_pronunciations_html(note_data["pronunciations"])
+            editor.note["Sound"] = format_sound_html(note_data["sound"]) + f"<br>[sound:{generate_speech(note_data['vocabulary'])}]"
+            editor.note["detail defination"] = (
+                format_kanji_html(note_data["kanji"]) 
+                + "<br>" + format_furigana_html(note_data["furigana"]) 
+                + "<br>" + format_meanings_html(note_data["explanations"]) 
+                + "<br>" + format_explanations_html(note_data["explanations"])
+            )
+            editor.note["Etymology, Synonyms and Antonyms"] = format_grammaticalRules_html(note_data["grammaticalRules"])
+            editor.note["Real-world examples"] = format_exampleSentences_html(note_data["exampleSentences"])
+            #add tags to this note
+            
             editor.loadNote()
     except Exception as e:
         showInfo(f"Error: {e}")
