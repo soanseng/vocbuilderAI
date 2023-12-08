@@ -45,8 +45,10 @@ create a node type called "vocbuilderAI" with following fields:
 ## Support:
 For support, questions, or feature requests, please visit the GitHub repository or contact the add-on author.
 ## TODO
-- [ ] add japanese vocabulary learning
+- [x] add japanese vocabulary learning
+- [ ] use different whisper sounds randomly.
 - [ ] at installation, check there is a vocbuilderAI note type or not, creating it for users automatically
-- [ ] use git submodule to load into libs for necessary packages
-- [ ] check this word is repeated? if repeated add tags or rewrite its content or not
-- [ ] add type to it for better development
+- [ ] add type(pydantic?) to it for better development
+- [ ] if openai is too slow, show timeout info, ask user to try again later
+- [x] use prompts.py to store prompt.
+- [ ] fix json/dict parsed in english word
