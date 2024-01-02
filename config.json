@@ -7,5 +7,6 @@
     "max_tokens": 15000,
     "temperature": 0.5,
     "speech_voice": "",
-    "speech_model": "tts-1-hd"
+    "speech_model": "tts-1-hd",
+    "speech_speed": 1.0,
 }

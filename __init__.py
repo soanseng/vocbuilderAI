@@ -46,9 +46,11 @@ def generate_speech(vocab_word, retries=3):
                 speech_voice = config.get("speech_voice", "")
 
             speech_model = config.get("speech_model", "tts-1-hd")
+            speech_speed = config.get("speech_speed", 1)
             response = client.audio.speech.create(
                 model=speech_model, 
                 voice=speech_voice, 
+                speed=speech_speed,
                 input=vocab_word)
             response.stream_to_file(temp_file_path)
             final_file_name = mw.col.media.addFile(str(temp_file_path))

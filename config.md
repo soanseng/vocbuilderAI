@@ -9,7 +9,8 @@
     "max_tokens": 15000,
     "temperature": 0.5,
     "speech_voice": "",
-    "speech_model":"tts-1-hd"
+    "speech_model":"tts-1-hd",
+    "speech_speed":1
 }
 ```
 
@@ -21,3 +22,4 @@
 - `max_tokens`: The maximum number of tokens to generate
 - `temperature`: Controls randomness. Lower temperature results in less random completions. As the temperature approaches zero, the model will become deterministic and repetitive. Higher temperature results in more random completions.
 - `speech_voice`: The voice to use for speech synthesis; leave empty "" for random voice
+- `speech_speed`: The speed of the generated audio. Select a value from 0.25 to 4.0. 1.0 is the default.
