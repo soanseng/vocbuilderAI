@@ -1,6 +1,7 @@
 import html
 from inspect import iscoroutine
 from platform import node
+import random
 from .prompts import VOC_PROMPT, JPY_PROMPT
 from aqt import mw, gui_hooks
 from aqt.gui_hooks import editor_did_init_buttons
@@ -37,8 +38,18 @@ def generate_speech(vocab_word, retries=3):
         try:
             hashed_vocab = hashlib.md5(vocab_word.encode()).hexdigest()
             temp_file_path = Path(__file__).parent / f"whisper-{hashed_vocab}.mp3"
-            voice = config.get("speech_voice", "nova")
-            response = client.audio.speech.create(model="tts-1", voice=voice, input=vocab_word)
+
+            random_voice = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+            if config.get("speech_voice", "") == "":
+                speech_voice = random.choice(random_voice)
+            else:
+                speech_voice = config.get("speech_voice", "")
+
+            speech_model = config.get("speech_model", "tts-1-hd")
+            response = client.audio.speech.create(
+                model=speech_model, 
+                voice=speech_voice, 
+                input=vocab_word)
             response.stream_to_file(temp_file_path)
             final_file_name = mw.col.media.addFile(str(temp_file_path))
             temp_file_path.unlink(missing_ok=True)
@@ -73,6 +84,24 @@ def format_meanings_html(meanings):
     return html_content
 
 
+#   "definitions": [
+#     {
+#       "text": "Definition 1",
+#       "grammaticalInfo": {
+#         "partOfSpeech": "Part of Speech",
+#         "forms": {
+#           "verb": ["present form", "past form", "past participle"],
+#           "adjective": ["comparative", "superlative"],
+#           "noun": ["plural form"]
+#         }
+#       }
+#     },
+forms_mapping = {
+    "verb": lambda values: ", ".join(values),
+    "adjective": lambda values: ", ".join(values),
+    "noun": lambda values: "".join(values),
+}
+
 def format_definitions_html(definitions):
     html_content = "<h3>Definitions:</h3><ol>"
     for definition in definitions:
@@ -88,8 +117,7 @@ def format_definitions_html(definitions):
             if forms:
                 html_content += "<ul>"
                 for form, values in forms.items():
-                    # Join multiple form values into a string
-                    values_str = ", ".join(values)
+                    values_str = forms_mapping.get(form, lambda x: x)(values)
                     html_content += f"<li><b>{form.capitalize()}:</b> {values_str}</li>"
                 html_content += "</ul>"
         html_content += "</li>"
@@ -312,7 +340,7 @@ def is_japanese_vocab(vocab_word):
 def generate_vocab_note(vocab_word: str, retries=3):
     # get info from config
     model = config.get("model", "gpt-3.5-turbo-1106")
-    temperature = config.get("temperature", 0.2)
+    temperature = config.get("temperature", 0.5)
     max_tokens = config.get("max_tokens", 15000)
 
     for i in range(retries):
