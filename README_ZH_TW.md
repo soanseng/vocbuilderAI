@@ -2,6 +2,7 @@
 
 ## 描述：
 VocabBuilderAI 是一款專為 Anki 設計的擴充功能，透過整合 OpenAI 的 GPT-3.5 Turbo 及 Whisper API，增強單詞學習體驗。它允許用戶為新單詞生成詳細的記憶卡片，包含定義、發音、詞源、同義詞、反義詞及實際例子。
+除了Openai外，你也可以使用[Groq](https://console.groq.com/docs/openai), [Ollama](https://github.com/ollama/ollama/blob/main/docs/openai.md), [OpenRouter](https://openrouter.ai/docs#principles)等OpenAI Compatibility. 
 - ![](media/dictionary.png)
 - ![](media/webster.png)
 ## 功能：

@@ -30,10 +30,10 @@ from openai import OpenAI
 
 # Accessing the configuration
 config = mw.addonManager.getConfig(__name__)
-OPENAI_API_KEY = config.get("openai_api_key")
 
 def generate_speech(vocab_word, retries=3):
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    api_key = config.get("openai_api_key")
+    client = OpenAI(api_key=api_key)
 
     for i in range(retries):
         try:
@@ -274,7 +274,7 @@ def add_note_to_deck(deck_name, tag_name, note_data):
     note["Sound"] = (
         format_sound_html(note_data["soundLink"]) + f"<br> [sound:{speech_file_path}] "
     )
-    note["detail defination"] = format_meanings_html(
+    note["detail definition"] = format_meanings_html(
         note_data["meanings"]
     ) + format_definitions_html(note_data["definitions"])
     note["Etymology, Synonyms and Antonyms"] = (
@@ -341,12 +341,13 @@ def is_japanese_vocab(vocab_word):
 
 
 
-def generate_vocab_note(vocab_word: str, retries=3, provider= 'openai'):
+def generate_vocab_note(vocab_word: str, retries=3):
     # get info from config
+    provider = config.get("provider")
     temperature = config.get("temperature", 0.5)
     if provider == 'openai':
         model = config.get("model", "gpt-3.5-turbo-1106")
-        api_key = OPENAI_API_KEY
+        api_key = config.get("openai_api_key") 
         base_url = "https://api.openai.com/v1"
     else:
         model = config.get("model")
@@ -378,11 +379,18 @@ def generate_vocab_note(vocab_word: str, retries=3, provider= 'openai'):
 
 
 def clean_response(response: str) -> str:
-    # Remove starting marker
-    if response.startswith("```json"):
-        response = response[len("```json") :]
+    # Find the index of the marker
+    idx = response.find("```")
+    if idx == -1:
+        idx = response.find("```json")
+    
+    # If the marker is found, remove everything before it
+    if idx != -1:
+        response = response[idx + len("```"):]  # account for the length of the marker
+        if response.startswith("json"):
+            response = response[len("json"):]
 
-    # Remove ending marker
+    # Remove the ending marker if present
     if response.endswith("```"):
         response = response[: -len("```")]
 
@@ -448,7 +456,7 @@ def on_add_note(editor: Editor):
             editor.note["Pronunciations"] = format_partsOfSpeech_html(note_data["partsOfSpeech"]) + format_pronunciations_html(note_data["pronunciations"])
             sound = generate_speech(note_data['vocabulary'])
             editor.note["Sound"] = format_sound_html(note_data["sound"]) + f"<br>[sound:{ sound }]"
-            editor.note["detail defination"] = (
+            editor.note["detail definition"] = (
                 format_kanji_html(note_data["kanji"]) 
                 + "<br>" + format_furigana_html(note_data["furigana"]) 
                 + "<br>" + format_meanings_html(note_data["explanations"]) 
