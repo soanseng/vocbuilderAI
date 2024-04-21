@@ -31,6 +31,7 @@ from openai import OpenAI
 # Accessing the configuration
 config = mw.addonManager.getConfig(__name__)
 OPENAI_API_KEY = config.get("openai_api_key")
+BASE_URL= config.get("base_url")
 
 def generate_speech(vocab_word, retries=3):
     client = OpenAI(api_key=OPENAI_API_KEY)
@@ -349,7 +350,7 @@ def generate_vocab_note(vocab_word: str, retries=3):
 
     for i in range(retries):
         try:
-            client = OpenAI(api_key=OPENAI_API_KEY)
+            client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
             response = client.chat.completions.create(
                 model=model,
                 messages=[
