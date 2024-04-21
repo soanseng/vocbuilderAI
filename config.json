@@ -1,5 +1,6 @@
 {
     "openai_api_key": "1234",
+    "other_api_key":"5678",
     "default_deck": "Big",
     "default_tag": "vocabulary::wordoftheday",
     "note_type": "vocbuilderAI",
@@ -9,5 +10,6 @@
     "speech_voice": "",
     "speech_model": "tts-1-hd",
     "speech_speed": 1.0,
-    "base_url": "https://api.openai.com/v1/chat/completions"
+    "base_url": "https://api.openai.com/v1/",
+    "other_base_url": "",
 }

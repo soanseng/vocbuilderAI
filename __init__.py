@@ -31,7 +31,6 @@ from openai import OpenAI
 # Accessing the configuration
 config = mw.addonManager.getConfig(__name__)
 OPENAI_API_KEY = config.get("openai_api_key")
-BASE_URL= config.get("base_url")
 
 def generate_speech(vocab_word, retries=3):
     client = OpenAI(api_key=OPENAI_API_KEY)
@@ -342,15 +341,21 @@ def is_japanese_vocab(vocab_word):
 
 
 
-def generate_vocab_note(vocab_word: str, retries=3):
+def generate_vocab_note(vocab_word: str, retries=3, provider= 'openai'):
     # get info from config
-    model = config.get("model", "gpt-3.5-turbo-1106")
     temperature = config.get("temperature", 0.5)
-    max_tokens = config.get("max_tokens", 15000)
+    if provider == 'openai':
+        model = config.get("model", "gpt-3.5-turbo-1106")
+        api_key = OPENAI_API_KEY
+        base_url = "https://api.openai.com/v1"
+    else:
+        model = config.get("model")
+        base_url = config.get("other_base_url")
+        api_key = config.get("other_api_key")
 
     for i in range(retries):
         try:
-            client = OpenAI(api_key=OPENAI_API_KEY, base_url=BASE_URL)
+            client = OpenAI(api_key=api_key, base_url=base_url)
             response = client.chat.completions.create(
                 model=model,
                 messages=[
