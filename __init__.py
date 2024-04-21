@@ -24,12 +24,13 @@ import time
 libs_path = os.path.join(os.path.dirname(__file__), "libs")
 sys.path.insert(0, libs_path)
 
+
 from openai import OpenAI
+
 
 # Accessing the configuration
 config = mw.addonManager.getConfig(__name__)
 OPENAI_API_KEY = config.get("openai_api_key")
-
 
 def generate_speech(vocab_word, retries=3):
     client = OpenAI(api_key=OPENAI_API_KEY)
@@ -38,7 +39,6 @@ def generate_speech(vocab_word, retries=3):
         try:
             hashed_vocab = hashlib.md5(vocab_word.encode()).hexdigest()
             temp_file_path = Path(__file__).parent / f"whisper-{hashed_vocab}.mp3"
-
             random_voice = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
             if config.get("speech_voice", "") == "":
                 speech_voice = random.choice(random_voice)
@@ -68,6 +68,7 @@ def generate_speech(vocab_word, retries=3):
 
 def format_vocabulary_html(word):
     return f"<h2>{word}</h2>"
+
 
 
 def format_pronunciations_html(pronunciation):
@@ -183,6 +184,7 @@ def format_examples_html(vocab_word, examples):
 #     {"sentence": "この店は近い将来に閉店する予定です。", "translation": "這家店計劃在不久的將來關閉。"}
 #   ]
 # }
+
 def format_kanji_html(kanji):
     html_content = "<h3>Kanji:</h3>"
     html_content += f"<p>{kanji}</p>"
@@ -421,7 +423,7 @@ def on_add_note(editor: Editor):
                 format_sound_html(note_data["soundLink"])
                 + f"<br>[sound:{sound}]"
             )
-            editor.note["detail defination"] = format_meanings_html(
+            editor.note["detail definition"] = format_meanings_html(
                 note_data["meanings"]
             ) + format_definitions_html(note_data["definitions"])
             editor.note["Etymology, Synonyms and Antonyms"] = (
