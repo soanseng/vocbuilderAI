@@ -367,6 +367,7 @@ def generate_vocab_note(vocab_word: str, retries=3):
                     {"role": "user", "content": f"{vocab_word}"},
                 ],
                 temperature=temperature,
+                response_format={"type" : "json_object"}
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -417,13 +418,11 @@ def on_add_note(editor: Editor):
         return
     try:
         response = generate_vocab_note(vocab_word)
-        note_data = process_response(response)
+        try:
+            note_data = json.loads(response)
+        except json.JSONDecodeError:
+            note_data = process_response(response)
 
-        if not isinstance(note_data, dict):
-            showInfo(
-                "Failed to generate note content. Please check your API key and Network."
-            )
-            return
 
         # Check if note_data is a dictionary and has necessary keys
         if isinstance(note_data, dict) and not is_japanese_vocab(vocab_word):
