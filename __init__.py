@@ -12,6 +12,7 @@ from anki.notes import Note
 import os
 import sys
 import json
+import requests
 from pathlib import Path
 import hashlib
 import traceback
@@ -26,6 +27,26 @@ sys.path.insert(0, libs_path)
 
 
 from openai import OpenAI
+
+
+def llm_api_request(endpoint, payload, api_key, base_url, retries=3):
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    for i in range(retries):
+        try:
+            response = requests.post(f"{base_url}/{endpoint}", headers=headers, json=payload)
+            response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            if i < retries - 1:
+                time.sleep(5)
+                continue
+            else:
+                showInfo(f"Error: {e}. please try again later")
+                return None
 
 
 # Accessing the configuration
@@ -354,30 +375,29 @@ def generate_vocab_note(vocab_word: str, retries=3):
         base_url = config.get("other_base_url")
         api_key = config.get("other_api_key")
 
-    for i in range(retries):
-        try:
-            client = OpenAI(api_key=api_key, base_url=base_url)
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": VOC_PROMPT if not is_japanese_vocab(vocab_word) else JPY_PROMPT, 
-                    },
-                    {"role": "user", "content": f"{vocab_word}"},
-                ],
-                temperature=temperature,
-                response_format={"type" : "json_object"}
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            if i < retries - 1:
-                time.sleep(5)
-                continue
-            else:
-                showInfo(f"Error: {e}. please try again later")
-                return None
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": VOC_PROMPT if not is_japanese_vocab(vocab_word) else JPY_PROMPT
+            },
+            {
+                "role": "user",
+                "content": f"{vocab_word}"
+            }
+        ],
+        "temperature": temperature,
+        "response_format": {
+            "type": "json_object"
+        }
+    }
 
+    response = llm_api_request("chat/completions", payload, api_key, base_url)
+    if response:
+        return response["choices"][0]["message"]["content"]
+
+    
 
 def clean_response(response: str) -> str:
     # Find the index of the marker
