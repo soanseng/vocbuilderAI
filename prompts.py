@@ -20,7 +20,7 @@ Format the JSON object as follows:
   "word": "Your English Word",
   "meanings": {
     "english": "Meaning in English",
-    "traditionalChinese": "Equivalent in Traditional Chinese"
+    "traditionalChinese": "Equivalent meaning and definition in ZH-TW",
   },
   "definitions": [
     {

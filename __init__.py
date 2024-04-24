@@ -1,3 +1,4 @@
+from calendar import c
 import html
 from inspect import iscoroutine
 from platform import node
@@ -20,14 +21,8 @@ import re
 import time
 
 
-
-# path to the libs folder
-libs_path = os.path.join(os.path.dirname(__file__), "libs")
-sys.path.insert(0, libs_path)
-
-
-from openai import OpenAI
-
+# Accessing the configuration
+config = mw.addonManager.getConfig(__name__)
 
 def llm_api_request(endpoint, payload, api_key, base_url, retries=3):
     headers = {
@@ -39,7 +34,7 @@ def llm_api_request(endpoint, payload, api_key, base_url, retries=3):
         try:
             response = requests.post(f"{base_url}/{endpoint}", headers=headers, json=payload)
             response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
-            return response.json()
+            return response
         except requests.exceptions.RequestException as e:
             if i < retries - 1:
                 time.sleep(5)
@@ -49,12 +44,10 @@ def llm_api_request(endpoint, payload, api_key, base_url, retries=3):
                 return None
 
 
-# Accessing the configuration
-config = mw.addonManager.getConfig(__name__)
 
 def generate_speech(vocab_word, retries=3):
     api_key = config.get("openai_api_key")
-    client = OpenAI(api_key=api_key)
+    base_url = config.get('base_url')
 
     for i in range(retries):
         try:
@@ -68,13 +61,17 @@ def generate_speech(vocab_word, retries=3):
 
             speech_model = config.get("speech_model", "tts-1-hd")
             speech_speed = config.get("speech_speed", 1)
-            response = client.audio.speech.create(
-                model=speech_model, 
-                voice=speech_voice, 
-                speed=speech_speed,
-                input=vocab_word)
-            response.stream_to_file(temp_file_path)
-            final_file_name = mw.col.media.addFile(str(temp_file_path))
+            payload = {
+                "model": speech_model,
+                "voice": speech_voice,
+                "speed": speech_speed,
+                "input": vocab_word
+            }
+            response = llm_api_request("audio/speech", payload, api_key, base_url)
+            with open(temp_file_path, "wb") as f:
+                    f.write(response.content)
+            
+            final_file_name = mw.col.media.addFile(temp_file_path)
             temp_file_path.unlink(missing_ok=True)
             return final_file_name
         except Exception as e:
@@ -395,6 +392,7 @@ def generate_vocab_note(vocab_word: str, retries=3):
 
     response = llm_api_request("chat/completions", payload, api_key, base_url)
     if response:
+        response = response.json()
         return response["choices"][0]["message"]["content"]
 
     
