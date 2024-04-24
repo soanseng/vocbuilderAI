@@ -40,7 +40,7 @@ def llm_api_request(endpoint, payload, api_key, base_url, retries=3):
                 time.sleep(5)
                 continue
             else:
-                showInfo(f"Error: {e}. please try again later")
+                showInfo(f"Error in api request: {e}. please try again later")
                 return None
 
 
@@ -75,12 +75,12 @@ def generate_speech(vocab_word, retries=3):
             temp_file_path.unlink(missing_ok=True)
             return final_file_name
         except Exception as e:
-            showInfo(f"Error: {e}")
+            showInfo(f"Error in speech: {e}")
             if i < retries - 1:
                 time.sleep(5)
                 continue
             else:
-                showInfo(f"Error: {e}. Please try again later.")
+                showInfo(f"Error in speech: {e}. Please try again later.")
                 return None
 
 
@@ -364,7 +364,7 @@ def generate_vocab_note(vocab_word: str, retries=3):
     provider = config.get("provider")
     temperature = config.get("temperature", 0.5)
     if provider == 'openai':
-        model = config.get("model", "gpt-3.5-turbo-1106")
+        model = config.get("model", "gpt-3.5-turbo")
         api_key = config.get("openai_api_key") 
         base_url = "https://api.openai.com/v1"
     else:
@@ -485,7 +485,7 @@ def on_add_note(editor: Editor):
             
             editor.loadNote()
     except Exception as e:
-        showInfo(f"Error: {e}")
+        showInfo(f"Error on add note: {e}")
         return
 
 
