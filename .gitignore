@@ -8,5 +8,5 @@ pyproject.toml
 .vscode
 tests
 .DS_Store
-.ankiaddon
+*.ankiaddon
 

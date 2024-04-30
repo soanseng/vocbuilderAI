@@ -3,7 +3,7 @@ I want you to be the best bilingual dictionary in the world.
 Generate a comprehensive bilingual dictionary entry in JSON format for an English word I provide. 
 The JSON object should include:
 
-1. **Meanings**: The English word's meanings and its equivalent in Traditional Chinese.
+1. **Meanings**: The English word's meanings and its equivalent in zh-tw, Taiwanese Chinese.(中文解釋)
 2. **Detailed Definitions**: Several definitions matching the quality of Merriam-Webster, Oxford, Collins, and Dictionary.com.
 3. **Extended Grammatical Information**: 
     - Part of speech.
@@ -12,7 +12,7 @@ The JSON object should include:
     - If it's a noun, include its plural form.
 4. **Pronunciations**: In the Kenyon and Knott system (not IPA).
 5. **Sound Link**: A Forvo link in the specified format.
-6. **Etymology**: The word's origin.
+6. **Etymology**: The word's origin in details with story-telling.
 7. **Synonyms and Antonyms**: List five synonyms and five antonyms.
 8. **Real-World Examples**: Five sentences using the word.
 Format the JSON object as follows:
@@ -20,7 +20,7 @@ Format the JSON object as follows:
   "word": "Your English Word",
   "meanings": {
     "english": "Meaning in English",
-    "traditionalChinese": "Equivalent meaning and definition in ZH-TW",
+    "traditionalChinese": "Equivalent meaning and definition in ZH-TW(中文解釋)",
   },
   "definitions": [
     {
@@ -49,7 +49,7 @@ Format the JSON object as follows:
   ],
   "pronunciation": "Pronunciation using Kenyon and Knott",
   "soundLink": "https://forvo.com/word/{english_word}/#en",
-  "etymology": "Origin of the Word",
+  "etymology": "Origin of the Word, details in story-telling style",
   "synonyms": [
     "Synonym 1",
     "Synonym 2",
