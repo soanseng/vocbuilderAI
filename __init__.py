@@ -24,7 +24,7 @@ import time
 # Accessing the configuration
 config = mw.addonManager.getConfig(__name__)
 
-def llm_api_request(endpoint, payload, api_key, base_url, retries=3):
+def llm_api_request(payload, api_key, base_url, retries=3):
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -32,7 +32,7 @@ def llm_api_request(endpoint, payload, api_key, base_url, retries=3):
 
     for i in range(retries):
         try:
-            response = requests.post(f"{base_url}/{endpoint}", headers=headers, json=payload)
+            response = requests.post(f"{base_url}", headers=headers, json=payload)
             response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
             return response
         except requests.exceptions.RequestException as e:
@@ -364,13 +364,19 @@ def generate_vocab_note(vocab_word: str, retries=3):
     provider = config.get("provider")
     temperature = config.get("temperature", 0.5)
     if provider == 'openai':
-        model = config.get("model", "gpt-3.5-turbo")
+        model = config.get("model", "gpt-4.0-mini")
         api_key = config.get("openai_api_key") 
         base_url = "https://api.openai.com/v1"
+    elif provider == 'deepseek':
+        model = config.get("model", "deepseek-chat")
+        base_url = "https://api.deepseek.com/chat/completions"
+        api_key = config.get("deepseek_api_key")
+    elif provider == 'groq':
+        model = config.get("model", "mixtral-8x7b-32768")
+        base_url = "https://api.groq.com/openai/v1/chat/completions"
+        api_key = config.get("groq_api_key")
     else:
-        model = config.get("model")
-        base_url = config.get("other_base_url")
-        api_key = config.get("other_api_key")
+        raise ValueError(f"Unsupported provider: {provider}")
 
     payload = {
         "model": model,
@@ -390,7 +396,7 @@ def generate_vocab_note(vocab_word: str, retries=3):
         }
     }
 
-    response = llm_api_request("chat/completions", payload, api_key, base_url)
+    response = llm_api_request(payload, api_key, base_url)
     if response:
         response = response.json()
         return response["choices"][0]["message"]["content"]
@@ -508,4 +514,3 @@ def add_action_button(buttons, editor: Editor):
 
 
 gui_hooks.editor_did_init_buttons.append(add_action_button)
-
