@@ -1,6 +1,7 @@
 {
-    "openai_api_key": "1234",
-    "other_api_key": "5678",
+    "openai_api_key": "your-openai-key",
+    "deepseek_api_key": "your-deepseek-key",
+    "groq_api_key": "your-groq-key",
     "default_deck": "Big",
     "default_tag": "vocabulary::wordoftheday",
     "note_type": "vocbuilderAI",
@@ -10,7 +11,5 @@
     "speech_voice": "",
     "speech_model": "tts-1-hd",
     "speech_speed": 1.0,
-    "provider":"openai",
-    "base_url": "https://api.openai.com/v1/",
-    "other_base_url": "https://api.example.com/v1/"
+    "provider": "openai"
 }
