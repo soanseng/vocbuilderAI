@@ -10,6 +10,7 @@ VocabBuilderAI is an Anki add-on that enhances vocabulary learning by integratin
 - OpenAI (GPT-3.5/4)
 - Deepseek
 - Groq
+- OpenRouter
 
 ![](media/dictionary.png)
 ![](media/webster.png)
@@ -50,8 +51,8 @@ Create a note type called "vocbuilderAI" with these fields:
 ### Configuration
 1. Go to Tools -> VocBuilderAI Settings
 2. Configure:
-   - API keys (OpenAI/Deepseek/Groq)
-   - LLM provider selection
+   - API keys (OpenAI/Deepseek/Groq/OpenRouter)
+   - LLM provider selection (OpenAI, Deepseek, Groq, OpenRouter)
    - Default deck and note type
    - Temperature and other model settings
    - Text-to-speech preferences
@@ -67,6 +68,7 @@ VocabBuilderAI 是一款 Anki 擴充功能，透過整合多個 LLM 供應商來
 - OpenAI (GPT-3.5/4)
 - Deepseek
 - Groq
+- OpenRouter
 
 ### 功能特點
 - 全面的單詞記憶卡片
@@ -98,8 +100,8 @@ VocabBuilderAI 是一款 Anki 擴充功能，透過整合多個 LLM 供應商來
 ### 設定選項
 1. 前往 工具 -> VocBuilderAI Settings
 2. 設定以下項目：
-   - API 金鑰 (OpenAI/Deepseek/Groq)
-   - LLM 供應商選擇
+   - API 金鑰 (OpenAI/Deepseek/Groq/OpenRouter)
+   - LLM 供應商選擇 (OpenAI, Deepseek, Groq, OpenRouter)
    - 預設牌組和筆記類型
    - Temperature 和其他模型設定
    - 文字轉語音偏好
@@ -107,4 +109,4 @@ VocabBuilderAI 是一款 Anki 擴充功能，透過整合多個 LLM 供應商來
 
 ## Support | 支援
 For support, questions, or feature requests, please visit our GitHub repository.
-如需支援、問題或功能請求，請訪問我們的 GitHub 專案頁面。
+如需支援、問題或功能請求，請訪問我們的 GitHub 專案頁面.

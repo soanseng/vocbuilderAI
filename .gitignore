@@ -10,3 +10,9 @@ tests
 .DS_Store
 *.ankiaddon
 
+# Development environment
+venv/
+.venv/
+*.pyc
+.python-version
+.idea/

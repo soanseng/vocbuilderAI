@@ -405,6 +405,10 @@ def get_provider_defaults(provider):
         'groq': {
             'model': 'llama-3.3-70b-versatile',
             'base_url': 'https://api.groq.com/openai/v1/chat/completions'
+        },
+        'openrouter': {
+            'model': 'mistralai/mistral-7b',
+            'base_url': 'https://openrouter.ai/api/v1/chat/completions'
         }
     }
     return defaults.get(provider, {})
@@ -427,6 +431,10 @@ def generate_vocab_note(vocab_word: str, retries=3):
         model = config.get("model") or provider_defaults['model']
         base_url = provider_defaults['base_url']
         api_key = config.get("groq_api_key")
+    elif provider == 'openrouter':
+        model = config.get("model") or provider_defaults['model']
+        base_url = provider_defaults['base_url']
+        api_key = config.get("openrouter_api_key")
     else:
         raise ValueError(f"Unsupported provider: {provider}")
 
@@ -581,16 +589,18 @@ class ConfigDialog(QDialog):
 
         # Provider selection
         self.provider = QComboBox()
-        self.provider.addItems(["openai", "deepseek", "groq"])
+        self.provider.addItems(["openai", "deepseek", "groq", "openrouter"])
         form_layout.addRow("Provider:", self.provider)
 
         # API Keys
         self.openai_key = QLineEdit()
         self.deepseek_key = QLineEdit()
         self.groq_key = QLineEdit()
+        self.openrouter_key = QLineEdit()
         form_layout.addRow("OpenAI API Key:", self.openai_key)
         form_layout.addRow("Deepseek API Key:", self.deepseek_key)
         form_layout.addRow("Groq API Key:", self.groq_key)
+        form_layout.addRow("OpenRouter API Key:", self.openrouter_key)
 
         # Model
         self.model = QLineEdit()
@@ -640,6 +650,7 @@ class ConfigDialog(QDialog):
         self.openai_key.setText(config.get("openai_api_key", ""))
         self.deepseek_key.setText(config.get("deepseek_api_key", ""))
         self.groq_key.setText(config.get("groq_api_key", ""))
+        self.openrouter_key.setText(config.get("openrouter_api_key", ""))
         self.model.setText(config.get("model", ""))
         self.temperature.setValue(float(config.get("temperature", 0.5)))
         self.speech_voice.setCurrentText(config.get("speech_voice", ""))
@@ -654,6 +665,7 @@ class ConfigDialog(QDialog):
             "openai_api_key": self.openai_key.text(),
             "deepseek_api_key": self.deepseek_key.text(),
             "groq_api_key": self.groq_key.text(),
+            "openrouter_api_key": self.openrouter_key.text(),
             "model": self.model.text(),
             "temperature": self.temperature.value(),
             "speech_voice": self.speech_voice.currentText(),
