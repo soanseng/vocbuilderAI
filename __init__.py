@@ -32,22 +32,42 @@ def llm_api_request(payload, api_key, base_url, retries=3):
 
     for i in range(retries):
         try:
-            response = requests.post(f"{base_url}", headers=headers, json=payload)
-            response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
+            if '/chat/completions' in base_url:
+                full_url = base_url
+            else:
+                full_url = f"{base_url.rstrip('/')}/chat/completions"
+            response = requests.post(full_url, headers=headers, json=payload)
+            try:
+                response.raise_for_status()
+            except requests.exceptions.HTTPError as e:
+                error_msg = f"HTTP Error: {e}\nStatus Code: {response.status_code}\nURL: {full_url}\n"
+                try:
+                    error_msg += f"Response: {response.json()}"
+                except:
+                    error_msg += f"Response Text: {response.text}"
+                showInfo(error_msg)
+                if i == retries - 1:
+                    return None
+                continue
             return response
         except requests.exceptions.RequestException as e:
+            error_msg = f"Request Error:\n{str(e)}\nURL: {full_url}\nPayload: {payload}"
             if i < retries - 1:
                 time.sleep(5)
                 continue
             else:
-                showInfo(f"Error in api request: {e}. please try again later")
+                showInfo(error_msg)
                 return None
 
 
 
 def generate_speech(vocab_word, retries=3):
     api_key = config.get("openai_api_key")
-    base_url = config.get('base_url')
+    if not api_key or api_key == "your-openai-key":
+        showInfo("OpenAI API key required for text-to-speech")
+        return None
+
+    base_url = "https://api.openai.com/v1"
 
     for i in range(retries):
         try:
@@ -60,27 +80,40 @@ def generate_speech(vocab_word, retries=3):
                 speech_voice = config.get("speech_voice", "")
 
             speech_model = config.get("speech_model", "tts-1-hd")
-            speech_speed = config.get("speech_speed", 1)
+            speech_speed = float(config.get("speech_speed", 1.0))
+            
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
             payload = {
                 "model": speech_model,
                 "voice": speech_voice,
                 "speed": speech_speed,
                 "input": vocab_word
             }
-            response = llm_api_request("audio/speech", payload, api_key, base_url)
+            
+            response = requests.post(
+                f"{base_url}/audio/speech",
+                headers=headers,
+                json=payload
+            )
+            response.raise_for_status()
+            
             with open(temp_file_path, "wb") as f:
-                    f.write(response.content)
+                f.write(response.content)
             
             final_file_name = mw.col.media.addFile(temp_file_path)
             temp_file_path.unlink(missing_ok=True)
             return final_file_name
         except Exception as e:
-            showInfo(f"Error in speech: {e}")
+            error_msg = f"Speech Error:\n{str(e)}\nPayload: {payload}"
             if i < retries - 1:
                 time.sleep(5)
                 continue
             else:
-                showInfo(f"Error in speech: {e}. Please try again later.")
+                showInfo(error_msg)
                 return None
 
 
@@ -369,10 +402,10 @@ def generate_vocab_note(vocab_word: str, retries=3):
         base_url = "https://api.openai.com/v1"
     elif provider == 'deepseek':
         model = config.get("model", "deepseek-chat")
-        base_url = "https://api.deepseek.com/chat/completions"
+        base_url = "https://api.deepseek.com"
         api_key = config.get("deepseek_api_key")
     elif provider == 'groq':
-        model = config.get("model", "mixtral-8x7b-32768")
+        model = config.get("model", "llama-3.3-70b-versatile")
         base_url = "https://api.groq.com/openai/v1/chat/completions"
         api_key = config.get("groq_api_key")
     else:
