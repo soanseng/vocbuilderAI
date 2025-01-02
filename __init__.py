@@ -566,3 +566,114 @@ def add_action_button(buttons, editor: Editor):
 
 
 gui_hooks.editor_did_init_buttons.append(add_action_button)
+
+
+class ConfigDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("VocBuilderAI Configuration")
+        self.setup_ui()
+        self.load_config()
+
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        form_layout = QFormLayout()
+
+        # Provider selection
+        self.provider = QComboBox()
+        self.provider.addItems(["openai", "deepseek", "groq"])
+        form_layout.addRow("Provider:", self.provider)
+
+        # API Keys
+        self.openai_key = QLineEdit()
+        self.deepseek_key = QLineEdit()
+        self.groq_key = QLineEdit()
+        form_layout.addRow("OpenAI API Key:", self.openai_key)
+        form_layout.addRow("Deepseek API Key:", self.deepseek_key)
+        form_layout.addRow("Groq API Key:", self.groq_key)
+
+        # Model
+        self.model = QLineEdit()
+        form_layout.addRow("Model:", self.model)
+
+        # Temperature
+        self.temperature = QDoubleSpinBox()
+        self.temperature.setRange(0.0, 2.0)
+        self.temperature.setSingleStep(0.1)
+        form_layout.addRow("Temperature:", self.temperature)
+
+        # Speech settings
+        self.speech_voice = QComboBox()
+        self.speech_voice.addItems(["", "alloy", "echo", "fable", "onyx", "nova", "shimmer"])
+        form_layout.addRow("Speech Voice:", self.speech_voice)
+
+        self.speech_model = QLineEdit()
+        form_layout.addRow("Speech Model:", self.speech_model)
+
+        self.speech_speed = QDoubleSpinBox()
+        self.speech_speed.setRange(0.25, 4.0)
+        self.speech_speed.setSingleStep(0.25)
+        form_layout.addRow("Speech Speed:", self.speech_speed)
+
+        # Default deck and tag
+        self.default_deck = QLineEdit()
+        self.default_tag = QLineEdit()
+        form_layout.addRow("Default Deck:", self.default_deck)
+        form_layout.addRow("Default Tag:", self.default_tag)
+
+        layout.addLayout(form_layout)
+
+        # Buttons
+        buttons = QHBoxLayout()
+        save_button = QPushButton("Save")
+        save_button.clicked.connect(self.save_config)
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(self.reject)
+        buttons.addWidget(save_button)
+        buttons.addWidget(cancel_button)
+        layout.addLayout(buttons)
+
+        self.setLayout(layout)
+
+    def load_config(self):
+        self.provider.setCurrentText(config.get("provider", "openai"))
+        self.openai_key.setText(config.get("openai_api_key", ""))
+        self.deepseek_key.setText(config.get("deepseek_api_key", ""))
+        self.groq_key.setText(config.get("groq_api_key", ""))
+        self.model.setText(config.get("model", ""))
+        self.temperature.setValue(float(config.get("temperature", 0.5)))
+        self.speech_voice.setCurrentText(config.get("speech_voice", ""))
+        self.speech_model.setText(config.get("speech_model", "tts-1-hd"))
+        self.speech_speed.setValue(float(config.get("speech_speed", 1.0)))
+        self.default_deck.setText(config.get("default_deck", "Big"))
+        self.default_tag.setText(config.get("default_tag", "vocabulary::wordoftheday"))
+
+    def save_config(self):
+        new_config = {
+            "provider": self.provider.currentText(),
+            "openai_api_key": self.openai_key.text(),
+            "deepseek_api_key": self.deepseek_key.text(),
+            "groq_api_key": self.groq_key.text(),
+            "model": self.model.text(),
+            "temperature": self.temperature.value(),
+            "speech_voice": self.speech_voice.currentText(),
+            "speech_model": self.speech_model.text(),
+            "speech_speed": self.speech_speed.value(),
+            "default_deck": self.default_deck.text(),
+            "default_tag": self.default_tag.text(),
+        }
+        
+        # Update config in memory and save to disk
+        global config
+        config.update(new_config)
+        mw.addonManager.writeConfig(__name__, new_config)
+        self.accept()
+
+def show_config():
+    dialog = ConfigDialog(mw)
+    dialog.exec()
+
+# Add menu item
+config_action = QAction("VocBuilderAI Settings", mw)
+config_action.triggered.connect(show_config)
+mw.form.menuTools.addAction(config_action)
