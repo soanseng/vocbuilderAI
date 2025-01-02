@@ -392,21 +392,40 @@ def is_japanese_vocab(vocab_word):
 
 
 
+def get_provider_defaults(provider):
+    defaults = {
+        'openai': {
+            'model': 'gpt-4.0-mini',
+            'base_url': 'https://api.openai.com/v1'
+        },
+        'deepseek': {
+            'model': 'deepseek-chat',
+            'base_url': 'https://api.deepseek.com'
+        },
+        'groq': {
+            'model': 'llama-3.3-70b-versatile',
+            'base_url': 'https://api.groq.com/openai/v1/chat/completions'
+        }
+    }
+    return defaults.get(provider, {})
+
 def generate_vocab_note(vocab_word: str, retries=3):
     # get info from config
-    provider = config.get("provider")
+    provider = config.get("provider", "openai")
     temperature = config.get("temperature", 0.5)
+    provider_defaults = get_provider_defaults(provider)
+    
     if provider == 'openai':
-        model = config.get("model", "gpt-4.0-mini")
+        model = config.get("model") or provider_defaults['model']
         api_key = config.get("openai_api_key") 
-        base_url = "https://api.openai.com/v1"
+        base_url = provider_defaults['base_url']
     elif provider == 'deepseek':
-        model = config.get("model", "deepseek-chat")
-        base_url = "https://api.deepseek.com"
+        model = config.get("model") or provider_defaults['model']
+        base_url = provider_defaults['base_url']
         api_key = config.get("deepseek_api_key")
     elif provider == 'groq':
-        model = config.get("model", "llama-3.3-70b-versatile")
-        base_url = "https://api.groq.com/openai/v1/chat/completions"
+        model = config.get("model") or provider_defaults['model']
+        base_url = provider_defaults['base_url']
         api_key = config.get("groq_api_key")
     else:
         raise ValueError(f"Unsupported provider: {provider}")
