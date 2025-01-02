@@ -48,12 +48,16 @@ Create a note type called "vocbuilderAI" with these fields:
 ![screenshot3](media/sceenshot-3.png)
 
 ### Configuration
-Edit `config.json` to set:
-- API keys (OpenAI/Deepseek/Groq)
-- LLM provider selection
-- Default deck and note type
-- Temperature and other model settings
-- Text-to-speech preferences
+1. Go to Tools -> VocBuilderAI Settings
+2. Configure:
+   - API keys (OpenAI/Deepseek/Groq)
+   - LLM provider selection
+   - Default deck and note type
+   - Temperature and other model settings
+   - Text-to-speech preferences
+3. Click Save to apply changes immediately
+
+### TODO
 
 ## Traditional Chinese
 
@@ -92,12 +96,14 @@ VocabBuilderAI 是一款 Anki 擴充功能，透過整合多個 LLM 供應商來
 4. 讓 AI 生成內容
 
 ### 設定選項
-編輯 `config.json` 來設定：
-- API 金鑰 (OpenAI/Deepseek/Groq)
-- LLM 供應商選擇
-- 預設牌組和筆記類型
-- Temperature 和其他模型設定
-- 文字轉語音偏好
+1. 前往 工具 -> VocBuilderAI Settings
+2. 設定以下項目：
+   - API 金鑰 (OpenAI/Deepseek/Groq)
+   - LLM 供應商選擇
+   - 預設牌組和筆記類型
+   - Temperature 和其他模型設定
+   - 文字轉語音偏好
+3. 點擊儲存立即套用變更
 
 ## Support | 支援
 For support, questions, or feature requests, please visit our GitHub repository.
