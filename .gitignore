@@ -16,3 +16,10 @@ venv/
 *.pyc
 .python-version
 .idea/
+
+#windsurf
+.windsurfrules
+.clinerules
+
+#uv setting
+uv.lock
