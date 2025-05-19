@@ -73,25 +73,31 @@ def generate_speech(vocab_word, retries=3):
         try:
             hashed_vocab = hashlib.md5(vocab_word.encode()).hexdigest()
             temp_file_path = Path(__file__).parent / f"whisper-{hashed_vocab}.mp3"
-            random_voice = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+            # include all supported TTS voices
+            random_voice = ["alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"]
             if config.get("speech_voice", "") == "":
                 speech_voice = random.choice(random_voice)
             else:
                 speech_voice = config.get("speech_voice", "")
 
-            speech_model = config.get("speech_model", "tts-1-hd")
-            speech_speed = float(config.get("speech_speed", 1.0))
+            speech_model = "gpt-4o-mini-tts"
             
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
             
+            # Wrap Japanese text in SSML if applicable
+            if is_japanese_vocab(vocab_word):
+                input_text = f"<speak><lang xml:lang='ja-JP'>{vocab_word}</lang></speak>"
+            else:
+                input_text = vocab_word
+            
             payload = {
                 "model": speech_model,
                 "voice": speech_voice,
-                "speed": speech_speed,
-                "input": vocab_word
+                "input": input_text,
+                "instructions": "Speak clearly and naturally."
             }
             
             response = requests.post(

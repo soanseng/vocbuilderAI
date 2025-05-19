@@ -1,19 +1,15 @@
-[tool.poetry]
-name = "VocabBuilderAI"
-version = "0.1.0"
-description = "generate detailed notes for new vocabulary using OpenAI's GPT-3.5 Turbo and Whisper's API"
-authors = ["Soanseng Tan <soanseng@anatomind.com>"]
+[project]
+name = "vocbuilderai"
+version = "0.9"
+description = "generate detailed notes for new vocabulary using LLM and Whisper's API"
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.9.15"
-anki = "^23.10.1"
-aqt = "^23.10.1"
-pytest = "^7.4.3"
-openai = "^1.3.5"
-python-dotenv = "^1.0.0"
-
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires-python = ">=3.11"
+dependencies = [
+    "anki>=24.11",
+    "aqt>=24.11",
+    "pyqt6-webengine>=6.8.0",
+    "pyqt6>=6.8.0",
+    "pytest>=8.3.4",
+    "python-dotenv>=1.0.1",
+    "watchdog>=6.0.0",
+]
