@@ -9,6 +9,7 @@ pyproject.toml
 tests
 .DS_Store
 *.ankiaddon
+.vscode/
 
 # Development environment
 venv/
@@ -17,9 +18,8 @@ venv/
 .python-version
 .idea/
 
-#windsurf
-.windsurfrules
-.clinerules
+#ai-related rules
+claude.md
 
 #uv setting
 uv.lock
