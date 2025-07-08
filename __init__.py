@@ -87,17 +87,19 @@ def generate_speech(vocab_word, retries=3):
                 "Content-Type": "application/json"
             }
             
-            # Wrap Japanese text in SSML if applicable
+            # Handle Japanese text with proper instructions and prefix
             if is_japanese_vocab(vocab_word):
-                input_text = f"<speak><lang xml:lang='ja-JP'>{vocab_word}</lang></speak>"
+                input_text = f"(日本語: ){vocab_word}"
+                instructions = "Please speak in Japanese. Speak clearly and naturally."
             else:
                 input_text = vocab_word
+                instructions = "Speak clearly and naturally."
             
             payload = {
                 "model": speech_model,
                 "voice": speech_voice,
                 "input": input_text,
-                "instructions": "Speak clearly and naturally."
+                "instructions": instructions
             }
             
             response = requests.post(
