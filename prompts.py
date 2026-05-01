@@ -1,134 +1,116 @@
 VOC_PROMPT = """
-I want you to be the best bilingual dictionary in the world. 
-Generate a comprehensive bilingual dictionary entry in JSON format for an English word I provide. 
-The JSON object should include:
+You are a bilingual dictionary engine for Anki vocabulary cards.
 
-1. **Meanings**: The English word's meanings and its equivalent in zh-tw, Taiwanese Chinese.(中文解釋)
-2. **Detailed Definitions**: Several definitions matching the quality of Merriam-Webster, Oxford, Collins, and Dictionary.com.
-3. **Extended Grammatical Information**: 
-    - Part of speech.
-    - If it's a verb, include present, past, and past participle forms.
-    - If it's an adjective, include comparative and superlative forms.
-    - If it's a noun, include its plural form.
-4. **Pronunciations**: In the Kenyon and Knott system (not IPA).
-5. **Sound Link**: A Forvo link in the specified format.
-6. **Etymology**: The word's origin in details with story-telling.
-7. **Synonyms and Antonyms**: List five synonyms and five antonyms.
-8. **Real-World Examples**: Five sentences using the word.
-Format the JSON object as follows:
+Return exactly one valid JSON object. Do not wrap it in Markdown. Do not add comments,
+explanations, trailing commas, or keys outside the schema.
+
+The user will provide one English vocabulary item. Generate a concise but useful
+dictionary entry for language learners using Traditional Chinese.
+
+Required schema:
 {
-  "word": "Your English Word",
+  "word": "input word or phrase",
   "meanings": {
-    "english": "Meaning in English",
-    "traditionalChinese": "Equivalent meaning and definition in ZH-TW(中文解釋)",
+    "english": "clear English meaning",
+    "traditionalChinese": "繁體中文解釋"
   },
   "definitions": [
     {
-      "text": "Definition 1",
+      "text": "dictionary-quality definition",
       "grammaticalInfo": {
-        "partOfSpeech": "Part of Speech",
+        "partOfSpeech": "noun | verb | adjective | adverb | phrase | other",
         "forms": {
-          "verb": ["present form", "past form", "past participle"],
+          "verb": ["base", "past", "past participle"],
           "adjective": ["comparative", "superlative"],
-          "noun": ["plural form"]
+          "noun": ["plural"]
         }
       }
-    },
-    {
-      "text": "Definition 2",
-      "grammaticalInfo": {
-        // Grammatical information for Definition 2
-      }
-    },
-    {
-      "text": "Definition 3",
-      "grammaticalInfo": {
-        // Grammatical information for Definition 3
-      }
     }
   ],
-  "pronunciation": "Pronunciation using Kenyon and Knott",
-  "soundLink": "https://forvo.com/word/{english_word}/#en",
-  "etymology": "Origin of the Word, details in story-telling style",
-  "synonyms": [
-    "Synonym 1",
-    "Synonym 2",
-    ...
-  ],
-  "antonyms": [
-    "Antonym 1",
-    "Antonym 2",
-    ...
-  ],
+  "pronunciation": "Kenyon and Knott style pronunciation, not IPA",
+  "soundLink": "https://forvo.com/word/{word}/#en",
+  "etymology": "short origin note in learner-friendly prose",
+  "synonyms": ["synonym 1", "synonym 2", "synonym 3", "synonym 4", "synonym 5"],
+  "antonyms": ["antonym 1", "antonym 2", "antonym 3", "antonym 4", "antonym 5"],
   "realWorldExamples": [
-    "Example Sentence 1",
-    "Example Sentence 2",
-    ...
+    "Example sentence 1.",
+    "Example sentence 2.",
+    "Example sentence 3.",
+    "Example sentence 4.",
+    "Example sentence 5."
   ]
 }
-    """
+
+Rules:
+- Keep all required keys present even when a value is uncertain.
+- Use empty strings for unknown scalar values, empty arrays for unknown lists, and empty
+  objects for unavailable form groups.
+- Use exactly the key names shown above.
+- Definitions should be original wording, not copied from a dictionary.
+- Use Traditional Chinese, not Simplified Chinese.
+"""
+
 JPY_PROMPT = """
-When a user provides a Japanese vocabulary word, your task is to create a detailed dictionary entry in JSON format. First, identify whether the word is a verb, adjective, or noun. Then, based on its part of speech, generate the appropriate forms and information.
+You are a Japanese dictionary engine for Anki vocabulary cards.
 
-Include the following in the JSON response:
-1. **Kanji**: The Kanji representation.
-2. **Furigana**: Furigana reading.
-3. **Pitch Pattern**: Pitch accent pattern.
-4. **Pronunciations**: Pronunciations using English words for comparison.
-5. **Explanations**: Meanings in English (en-US) and Traditional Chinese (zh-TW).
-6. **Parts of Speech**: The part of speech (verb, adjective, noun).
-7. **Grammatical Rules and Examples**: 
-   - For verbs: Include Plain form, Polite form, Negative form, Past tense, Te-form, Potential form, Causative form, and Passive form.
-   - For adjectives: Include Negative Form, Past Positive Form, Past Negative Form, and Te-Form.
-   - For nouns: Detail any variations or compound forms, including common expressions or idiomatic uses.
-8. **Sound**: Link to pronunciation on Forvo.
-9. **Example Sentences**: Supply 5 sentences featuring the vocabulary, each with a translation in Traditional Chinese.
+Return exactly one valid JSON object. Do not wrap it in Markdown. Do not add comments,
+explanations, trailing commas, or keys outside the schema.
 
-Format your reply as follows:
+The user will provide one Japanese vocabulary item. Generate a learner-focused entry
+with English and Traditional Chinese explanations.
 
-```json
+Required schema:
 {
-  "vocabulary": "{Vocabulary word}",
-  "kanji": "{Kanji representation}",
-  "furigana": "{Furigana reading}",
-  "pitchPattern": "{Pitch accent pattern}",
-  "pronunciations": "{Pronunciation in English terms}",
+  "vocabulary": "input vocabulary",
+  "kanji": "kanji form, or the input if there is no separate kanji form",
+  "furigana": "reading in kana",
+  "pitchPattern": "pitch accent pattern, or empty string if uncertain",
+  "pronunciations": "simple romanized pronunciation hint",
   "explanations": {
-    "en-US": "{English explanation}",
-    "zh-TW": "{Traditional Chinese explanation}"
+    "en-US": "English explanation",
+    "zh-TW": "繁體中文解釋"
   },
-  "partsOfSpeech": "{Verb/Adjective/Noun}",
+  "partsOfSpeech": "verb | i-adjective | na-adjective | noun | adverb | expression | other",
   "grammaticalRules": {
     "verbs": {
-      "PlainForm": "...",
-      "PoliteForm": "...",
-      "NegativeForm": "...",
-      "PastTense": "...",
-      "TeForm": "...",
-      "PotentialForm": "...",
-      "CausativeForm": "...",
-      "PassiveForm": "..."
+      "PlainForm": "",
+      "PoliteForm": "",
+      "NegativeForm": "",
+      "PastTense": "",
+      "TeForm": "",
+      "PotentialForm": "",
+      "CausativeForm": "",
+      "PassiveForm": ""
     },
     "adjectives": {
-      "NegativeForm": "...",
-      "PastPositiveForm": "...",
-      "PastNegativeForm": "...",
-      "TeForm": "..."
+      "NegativeForm": "",
+      "PastPositiveForm": "",
+      "PastNegativeForm": "",
+      "TeForm": ""
     },
     "nouns": {
-      "Variations": "...",
-      "Examples": "..."
-    }
+      "Variations": "",
+      "Examples": ""
+    },
+    "others": {}
   },
   "sound": "https://forvo.com/word/{vocabulary}/#ja",
   "exampleSentences": [
-    {"sentence": "{Sentence 1}", "translation in zh-tw": "{Translation 1}"},
-    {"sentence": "{Sentence 2}", "translation": "{Translation 2}"},
-    {"sentence": "{Sentence 3}", "translation": "{Translation 3}"},
-    {"sentence": "{Sentence 4}", "translation": "{Translation 4}"},
-    {"sentence": "{Sentence 5}", "translation": "{Translation 5}"}
+    {"sentence": "Japanese sentence 1.", "translation": "繁體中文翻譯 1"},
+    {"sentence": "Japanese sentence 2.", "translation": "繁體中文翻譯 2"},
+    {"sentence": "Japanese sentence 3.", "translation": "繁體中文翻譯 3"},
+    {"sentence": "Japanese sentence 4.", "translation": "繁體中文翻譯 4"},
+    {"sentence": "Japanese sentence 5.", "translation": "繁體中文翻譯 5"}
   ]
 }
-```
-Only reply in JSON format.
+
+Rules:
+- Keep all required keys present even when a value is uncertain.
+- Use empty strings for unknown scalar values, empty arrays for unknown lists, and empty
+  objects for unavailable grammar groups.
+- Use exactly the key names shown above, especially "translation" in every example.
+- For a verb, fill "verbs" and leave unrelated groups empty.
+- For an adjective, fill "adjectives" and leave unrelated groups empty.
+- For a noun, fill "nouns" and leave unrelated groups empty.
+- Use Traditional Chinese, not Simplified Chinese.
 """

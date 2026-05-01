@@ -8,7 +8,7 @@ from pathlib import Path
 
 import requests
 
-try:
+try:  # pragma: no cover - exercised by Anki, not by headless tests.
     from .prompts import JPY_PROMPT, VOC_PROMPT
 except ImportError:
     from prompts import JPY_PROMPT, VOC_PROMPT
@@ -617,7 +617,7 @@ def on_add_note(editor: Editor):
         showInfo(f"Error on add note: {error}")
 
 
-def add_note_to_deck(deck_name, tag_name, note_data):
+def add_note_to_deck(deck_name, tag_name, note_data):  # pragma: no cover - requires a live Anki collection.
     if not ANKI_AVAILABLE:
         raise RuntimeError("Anki is required to add notes to a deck.")
 
@@ -651,7 +651,7 @@ def add_note_to_deck(deck_name, tag_name, note_data):
     mw.col.save()
 
 
-def add_action_button(buttons, editor: Editor):
+def add_action_button(buttons, editor: Editor):  # pragma: no cover - requires Anki editor UI.
     button = editor.addButton(
         icon=None,
         label="VocAI",
@@ -664,11 +664,11 @@ def add_action_button(buttons, editor: Editor):
     return buttons
 
 
-if ANKI_AVAILABLE:
+if ANKI_AVAILABLE:  # pragma: no cover - Anki hook registration.
     gui_hooks.editor_did_init_buttons.append(add_action_button)
 
 
-if ANKI_AVAILABLE:
+if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
 
     class ConfigDialog(QDialog):
         def __init__(self, parent=None):

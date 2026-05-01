@@ -1,0 +1,9 @@
+[run]
+omit =
+    dev.py
+    tests/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if ANKI_AVAILABLE:
