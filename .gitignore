@@ -6,7 +6,6 @@ __pycache__
 poetry.lock
 pyproject.toml
 .vscode
-tests
 .DS_Store
 *.ankiaddon
 .vscode/

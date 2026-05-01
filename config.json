@@ -2,14 +2,15 @@
     "openai_api_key": "your-openai-key",
     "deepseek_api_key": "your-deepseek-key",
     "groq_api_key": "your-groq-key",
+    "openrouter_api_key": "your-openrouter-key",
     "default_deck": "Big",
     "default_tag": "vocabulary::wordoftheday",
     "note_type": "vocbuilderAI",
-    "model": "gpt-3.5-turbo",
+    "model": "",
     "max_tokens": 15000,
     "temperature": 0.5,
     "speech_voice": "",
-    "speech_model": "tts-1-hd",
+    "speech_model": "gpt-4o-mini-tts",
     "speech_speed": 1.0,
     "provider": "openai"
 }

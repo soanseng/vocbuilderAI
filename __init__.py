@@ -1,699 +1,849 @@
-from calendar import c
-import html
-from inspect import iscoroutine
-from platform import node
-import random
-from .prompts import VOC_PROMPT, JPY_PROMPT
-from aqt import mw, gui_hooks
-from aqt.gui_hooks import editor_did_init_buttons
-from aqt.editor import Editor
-from aqt.utils import showInfo
-from aqt.qt import *
-from anki.notes import Note
-import os
-import sys
-import json
-import requests
-from pathlib import Path
 import hashlib
-import traceback
+import json
+import random
 import re
+import sys
 import time
+from pathlib import Path
+
+import requests
+
+try:
+    from .prompts import JPY_PROMPT, VOC_PROMPT
+except ImportError:
+    from prompts import JPY_PROMPT, VOC_PROMPT
+
+try:
+    if "pytest" in sys.modules:
+        raise ImportError("Skip Anki/Qt imports during pytest collection.")
+    from aqt import gui_hooks, mw
+    from aqt.editor import Editor
+    from aqt.qt import (
+        QAction,
+        QCheckBox,
+        QComboBox,
+        QDialog,
+        QDialogButtonBox,
+        QDoubleSpinBox,
+        QFormLayout,
+        QFrame,
+        QGroupBox,
+        QHBoxLayout,
+        QLabel,
+        QLineEdit,
+        QPushButton,
+        QScrollArea,
+        QSizePolicy,
+        QTabWidget,
+        QVBoxLayout,
+        QWidget,
+    )
+    from aqt.utils import showInfo
+    from anki.notes import Note
+
+    ANKI_AVAILABLE = mw is not None and getattr(mw, "form", None) is not None
+except Exception:
+    ANKI_AVAILABLE = False
+    mw = None
+    gui_hooks = None
+    Editor = object
+    Note = None
+
+    def showInfo(message):
+        print(message)
+
+    class _UnavailableQt:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("Qt is only available inside Anki.")
+
+    QAction = QCheckBox = QComboBox = QDialog = QDialogButtonBox = QDoubleSpinBox = _UnavailableQt
+    QFormLayout = QFrame = QGroupBox = QHBoxLayout = QLabel = QLineEdit = _UnavailableQt
+    QPushButton = QScrollArea = QSizePolicy = QTabWidget = QVBoxLayout = QWidget = _UnavailableQt
 
 
-# Accessing the configuration
-config = mw.addonManager.getConfig(__name__)
-
-def llm_api_request(payload, api_key, base_url, retries=3):
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-
-    for i in range(retries):
-        try:
-            if '/chat/completions' in base_url:
-                full_url = base_url
-            else:
-                full_url = f"{base_url.rstrip('/')}/chat/completions"
-            response = requests.post(full_url, headers=headers, json=payload)
-            try:
-                response.raise_for_status()
-            except requests.exceptions.HTTPError as e:
-                error_msg = f"HTTP Error: {e}\nStatus Code: {response.status_code}\nURL: {full_url}\n"
-                try:
-                    error_msg += f"Response: {response.json()}"
-                except:
-                    error_msg += f"Response Text: {response.text}"
-                showInfo(error_msg)
-                if i == retries - 1:
-                    return None
-                continue
-            return response
-        except requests.exceptions.RequestException as e:
-            error_msg = f"Request Error:\n{str(e)}\nURL: {full_url}\nPayload: {payload}"
-            if i < retries - 1:
-                time.sleep(5)
-                continue
-            else:
-                showInfo(error_msg)
-                return None
-
-
-
-def generate_speech(vocab_word, retries=3):
-    api_key = config.get("openai_api_key")
-    if not api_key or api_key == "your-openai-key":
-        showInfo("OpenAI API key required for text-to-speech")
-        return None
-
-    base_url = "https://api.openai.com/v1"
-
-    for i in range(retries):
-        try:
-            hashed_vocab = hashlib.md5(vocab_word.encode()).hexdigest()
-            temp_file_path = Path(__file__).parent / f"whisper-{hashed_vocab}.mp3"
-            # include all supported TTS voices
-            random_voice = ["alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"]
-            if config.get("speech_voice", "") == "":
-                speech_voice = random.choice(random_voice)
-            else:
-                speech_voice = config.get("speech_voice", "")
-
-            speech_model = "gpt-4o-mini-tts"
-            
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            # Handle Japanese text with proper instructions and prefix
-            if is_japanese_vocab(vocab_word):
-                input_text = f"(日本語: ){vocab_word}"
-                instructions = "Please speak in Japanese. Speak clearly and naturally."
-            else:
-                input_text = vocab_word
-                instructions = "Speak clearly and naturally."
-            
-            payload = {
-                "model": speech_model,
-                "voice": speech_voice,
-                "input": input_text,
-                "instructions": instructions
-            }
-            
-            response = requests.post(
-                f"{base_url}/audio/speech",
-                headers=headers,
-                json=payload
-            )
-            response.raise_for_status()
-            
-            with open(temp_file_path, "wb") as f:
-                f.write(response.content)
-            
-            final_file_name = mw.col.media.addFile(temp_file_path)
-            temp_file_path.unlink(missing_ok=True)
-            return final_file_name
-        except Exception as e:
-            error_msg = f"Speech Error:\n{str(e)}\nPayload: {payload}"
-            if i < retries - 1:
-                time.sleep(5)
-                continue
-            else:
-                showInfo(error_msg)
-                return None
-
-
-def format_vocabulary_html(word):
-    return f"<h2>{word}</h2>"
-
-
-
-def format_pronunciations_html(pronunciation):
-    return f"<h3>Pronunciation:</h3><p>{pronunciation}</p>"
-
-
-def format_sound_html(sound_link):
-    return f"<h3>Sound:</h3><a href='{sound_link}'>Listen</a>"
-
-
-def format_meanings_html(meanings):
-    html_content = "<h3>Meanings:</h3><ul>"
-    for lang, meaning in meanings.items():
-        html_content += f"<li><b>{lang.capitalize()}:</b> {meaning}</li>"
-    html_content += "</ul><br>"
-    return html_content
-
-
-#   "definitions": [
-#     {
-#       "text": "Definition 1",
-#       "grammaticalInfo": {
-#         "partOfSpeech": "Part of Speech",
-#         "forms": {
-#           "verb": ["present form", "past form", "past participle"],
-#           "adjective": ["comparative", "superlative"],
-#           "noun": ["plural form"]
-#         }
-#       }
-#     },
-forms_mapping = {
-    "verb": lambda values: ", ".join(values),
-    "adjective": lambda values: ", ".join(values),
-    "noun": lambda values: "".join(values),
+CONFIG_DEFAULTS = {
+    "openai_api_key": "your-openai-key",
+    "deepseek_api_key": "your-deepseek-key",
+    "groq_api_key": "your-groq-key",
+    "openrouter_api_key": "your-openrouter-key",
+    "default_deck": "Big",
+    "default_tag": "vocabulary::wordoftheday",
+    "note_type": "vocbuilderAI",
+    "model": "",
+    "max_tokens": 15000,
+    "temperature": 0.5,
+    "speech_voice": "",
+    "speech_model": "gpt-4o-mini-tts",
+    "speech_speed": 1.0,
+    "provider": "openai",
 }
 
-def format_definitions_html(definitions):
-    html_content = "<h3>Definitions:</h3><ol>"
-    for definition in definitions:
-        html_content += f"<li><b>{definition.get('text', 'No definition')}</b>"
+PROVIDER_DEFAULTS = {
+    "openai": {
+        "model": "gpt-4o-mini",
+        "base_url": "https://api.openai.com/v1",
+        "api_key_config": "openai_api_key",
+        "supports_response_format": True,
+    },
+    "deepseek": {
+        "model": "deepseek-chat",
+        "base_url": "https://api.deepseek.com",
+        "api_key_config": "deepseek_api_key",
+        "supports_response_format": True,
+    },
+    "groq": {
+        "model": "llama-3.3-70b-versatile",
+        "base_url": "https://api.groq.com/openai/v1/chat/completions",
+        "api_key_config": "groq_api_key",
+        "supports_response_format": True,
+    },
+    "openrouter": {
+        "model": "openai/gpt-4o-mini",
+        "base_url": "https://openrouter.ai/api/v1/chat/completions",
+        "api_key_config": "openrouter_api_key",
+        "supports_response_format": False,
+    },
+}
 
-        grammatical_info = definition.get("grammaticalInfo")
-        if grammatical_info:
-            part_of_speech = grammatical_info.get("partOfSpeech")
-            if part_of_speech:
-                html_content += f" <i>({part_of_speech})</i>"
+PLACEHOLDER_KEYS = {
+    "your-openai-key",
+    "your-deepseek-key",
+    "your-groq-key",
+    "your-openrouter-key",
+}
 
-            forms = grammatical_info.get("forms")
-            if forms:
-                html_content += "<ul>"
-                for form, values in forms.items():
-                    values_str = forms_mapping.get(form, lambda x: x)(values)
-                    html_content += f"<li><b>{form.capitalize()}:</b> {values_str}</li>"
-                html_content += "</ul>"
-        html_content += "</li>"
-    html_content += "</ol>"
-    return html_content
-
-
-def format_etymology_html(etymology):
-    return f"<h3>Etymology:</h3><p>{etymology}</p><br>"
-
-
-def format_synonyms_html(synonyms):
-    html_content = "<h3>Synonyms:</h3><ol>"
-    for synonym in synonyms:
-        html_content += f"<li>{synonym}</li>"
-    html_content += "</ol><br>"
-    return html_content
-
-def format_antonyms_html(antonyms):
-    html_content = "<h3>Antonyms:</h3><ol>"
-    for antonym in antonyms:
-        html_content += f"<li>{antonym}</li>"
-    html_content += "</ol><br>"
-    return html_content
+JAPANESE_CHAR_PATTERN = re.compile(
+    r"[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]"
+)
 
 
-def format_examples_html(vocab_word, examples):
-    html_content = "<h3>Real-world Examples:</h3><ul>"
-    for example in examples:
-        bold_word = example.replace(vocab_word, f"<strong>{vocab_word}</strong>")
-        html_content += f"<li>{bold_word}</li>"
-    html_content += "</ul>"
-    return html_content
-
-# format for japanese vocab
-# {
-#   "vocabulary": "近い",
-#   "kanji": "近い",
-#   "furigana": "ちかい",
-#   "pitchPattern": "0",
-#   "pronunciations": "chikai",
-#   "explanations": {
-#     "en-US": "near, close",
-#     "zh-TW": "近的"
-#   },
-#   "partsOfSpeech": "adjective",
-#   "grammaticalRules": {
-#     "adjectives": {
-#       "NegativeForm": "近くない",
-#       "PastPositiveForm": "近かった",
-#       "PastNegativeForm": "近くなかった",
-#       "TeForm": "近くて"
-#     }
-#   },
-#   "sound": "https://forvo.com/word/近い/#ja",
-#   "exampleSentences": [
-#     {"sentence": "この家は駅に近いです。", "translation": "這個房子離車站很近。"},
-#     {"sentence": "彼は私の近い友達です。", "translation": "他是我親近的朋友。"},
-#     {"sentence": "近い将来に旅行したいです。", "translation": "我想在不久的將來旅行。"},
-#     {"sentence": "彼女は近い将来に結婚する予定です。", "translation": "她計劃在不久的將來結婚。"},
-#     {"sentence": "この店は近い将来に閉店する予定です。", "translation": "這家店計劃在不久的將來關閉。"}
-#   ]
-# }
-
-def format_kanji_html(kanji):
-    html_content = "<h3>Kanji:</h3>"
-    html_content += f"<p>{kanji}</p>"
-    return html_content
-def format_furigana_html(furigana):
-    html_content = "<h3>Furigana:</h3>"
-    html_content += f"<p>{furigana}</p>"
-    return html_content
-def format_pitchPattern_html(pitchPattern):
-    html_content = "<h3>Pitch Pattern:</h3>"
-    html_content += f"<p>{pitchPattern}</p>"
-    return html_content
-def format_explanations_html(explanations):
-    html_content = "<h3>Explanations:</h3>"
-    html_content += f"<p>en-US: {explanations['en-US']}</p>"
-    html_content += f"<p>zh-TW: {explanations['zh-TW']}</p>"
-    return html_content
-def format_partsOfSpeech_html(partsOfSpeech):
-    html_content = "<h3>Parts of Speech:</h3>"
-    html_content += f"<p>{partsOfSpeech}</p>"
-    return html_content
-def format_grammaticalRules_html(grammaticalRules: dict):
-    # "grammaticalRules": {
-    # "verbs": {},
-    # "adjectives": {},
-    # "nouns": {
-    #   "Variations": "遅刻する (to be late); 遅刻者 (latecomer)",
-    #   "Examples": "彼はいつも遅刻する。\nHe is always late.\n他の人よりも遅刻することが多い。\nHe is late more often than others.\n彼は遅刻者だ。\nHe is a latecomer."
-    # }
-    # the json is been parsed by `process_response` into a dict, sometimes the verb, adjective, noun is empty
-    html_content = "<h3>Grammatical Rules:</h3>"
-
-    if grammaticalRules.get("verbs"):
-        html_content += "<h4>verbs:</h4>"
-        html_content += f"<p>PlainForm: {grammaticalRules['verbs']['PlainForm']}</p>"
-        html_content += f"<p>PoliteForm: {grammaticalRules['verbs']['PoliteForm']}</p>"
-        html_content += f"<p>NegativeForm: {grammaticalRules['verbs']['NegativeForm']}</p>"
-        html_content += f"<p>PastTense: {grammaticalRules['verbs']['PastTense']}</p>"
-        html_content += f"<p>TeForm: {grammaticalRules['verbs']['TeForm']}</p>"
-        html_content += f"<p>PotentialForm: {grammaticalRules['verbs']['PotentialForm']}</p>"
-        html_content += f"<p>CausativeForm: {grammaticalRules['verbs']['CausativeForm']}</p>"
-        html_content += f"<p>PassiveForm: {grammaticalRules['verbs']['PassiveForm']}</p>"
-    if grammaticalRules.get("adjectives"):
-        html_content += "<h4>adjectives:</h4>"
-        html_content += f"<p>NegativeForm: {grammaticalRules['adjectives']['NegativeForm']}</p>"
-        html_content += f"<p>PastPositiveForm: {grammaticalRules['adjectives']['PastPositiveForm']}</p>"
-        html_content += f"<p>PastNegativeForm: {grammaticalRules['adjectives']['PastNegativeForm']}</p>"
-        html_content += f"<p>TeForm: {grammaticalRules['adjectives']['TeForm']}</p>"
-    if grammaticalRules.get("nouns"):
-        html_content += "<h4>nouns:</h4>"
-        html_content += f"<p>Variations: {grammaticalRules['nouns']['Variations']}</p>"
-        # break the line in examples to unordered list
-        html_content += "<ul>"
-        for example in grammaticalRules['nouns']['Examples'].split("\n"):
-            html_content += f"<li>{example}</li>"
-    if grammaticalRules.get("others"):
-        html_content += "<h4>others:</h4>"
-        html_content += f"<p>others: {grammaticalRules['others']}</p>"
-    #error handling
-    if not grammaticalRules.get("verbs") and not grammaticalRules.get("adjectives") and not grammaticalRules.get("nouns") and not grammaticalRules.get("others"):
-        html_content += "<p>No grammatical rules found.</p>"
-    return html_content
-
-def format_exampleSentences_html(exampleSentences):
-    html_content = "<h3>Example Sentences:</h3><ol>"
-    for exampleSentence in exampleSentences:
-        html_content += f"<li><strong>{exampleSentence.get('sentence')}</strong> - {exampleSentence.get('translation')}</li>"
-        html_content += "</ol>"
-    return html_content
-
-def add_note_to_deck(deck_name, tag_name, note_data):
-    # Ensure the deck exists, or create it
-    did = mw.col.decks.id(deck_name)
-    mw.col.decks.select(did)
-
-    # Set the model (note type)
-    model = mw.col.models.byName("vocbuilderAI")
-    mw.col.models.setCurrent(model)
-
-    # generate sound and save to note
-    speech_file_path = generate_speech(note_data["word"])
-
-    # Create a new note
-    note = Note(mw.col, model)
-    note["vocabulary"] = format_vocabulary_html(note_data["word"])
-    note["Pronunciations"] = format_pronunciations_html(note_data["pronunciation"])
-    note["Sound"] = (
-        format_sound_html(note_data["soundLink"]) + f"<br> [sound:{speech_file_path}] "
-    )
-    note["detail definition"] = format_meanings_html(
-        note_data["meanings"]
-    ) + format_definitions_html(note_data["definitions"])
-    note["Etymology, Synonyms and Antonyms"] = (
-        format_etymology_html(note_data["etymology"])
-        + format_synonyms_html(note_data["synonyms"])
-        + format_antonyms_html(note_data["antonyms"])
-    )
-    note["Real-world examples"] = format_examples_html(
-        note_data["word"], note_data["realWorldExamples"]
-    )
-    # set the tag for the note
-    note.addTag(tag_name)
-
-    # Add note to the deck
-    mw.col.addNote(note)
-    mw.col.decks.save()
-    mw.col.save()
+def load_addon_config():
+    if not ANKI_AVAILABLE or mw is None:
+        return dict(CONFIG_DEFAULTS)
+    addon_config = mw.addonManager.getConfig(__name__) or {}
+    return {**CONFIG_DEFAULTS, **addon_config}
 
 
-def get_tag_name(default_tag="vocabulary::wordoftheday"):
-    tags = mw.col.tags.all()
-    tag_name, ok = QInputDialog.getItem(
-        mw,
-        "Select Tag",
-        "Choose the tag to add the note:",
-        tags,
-        tags.index(default_tag) if default_tag in tags else 0,
-        False,
-    )
-    return tag_name if ok and tag_name else default_tag
-
-
-def get_deck_name(default_deck="Big"):
-    decks = mw.col.decks.allNames()
-    deck_name, ok = QInputDialog.getItem(
-        mw,
-        "Select Deck",
-        "Choose the deck to add the note:",
-        decks,
-        decks.index(default_deck) if default_deck in decks else 0,
-        False,
-    )
-    return deck_name if ok and deck_name else default_deck
-
-def is_japanese_vocab(vocab_word):
-
-    """
-    Determine if a given word is Japanese based on character set analysis.
-
-    Args:
-    word (str): The word to be analyzed.
-
-    Returns:
-    bool: True if the word is Japanese, False otherwise.
-    """
-    # Regular expression pattern for matching Japanese characters (Kanji, Hiragana, Katakana)
-    japanese_char_pattern = r'[\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]'
-
-    # Check if the word contains any Japanese characters
-    if re.search(japanese_char_pattern, vocab_word):
-        return True
-    else:
-        return False
-
+config = load_addon_config()
 
 
 def get_provider_defaults(provider):
-    defaults = {
-        'openai': {
-            'model': 'gpt-4.0-mini',
-            'base_url': 'https://api.openai.com/v1'
-        },
-        'deepseek': {
-            'model': 'deepseek-chat',
-            'base_url': 'https://api.deepseek.com'
-        },
-        'groq': {
-            'model': 'llama-3.3-70b-versatile',
-            'base_url': 'https://api.groq.com/openai/v1/chat/completions'
-        },
-        'openrouter': {
-            'model': 'mistralai/mistral-7b',
-            'base_url': 'https://openrouter.ai/api/v1/chat/completions'
-        }
+    return PROVIDER_DEFAULTS.get(provider, PROVIDER_DEFAULTS["openai"])
+
+
+def is_japanese_vocab(vocab_word):
+    return bool(vocab_word and JAPANESE_CHAR_PATTERN.search(str(vocab_word)))
+
+
+def normalize_api_key(api_key):
+    api_key = (api_key or "").strip()
+    if not api_key or api_key in PLACEHOLDER_KEYS:
+        return ""
+    return api_key
+
+
+def chat_completions_url(base_url):
+    if "/chat/completions" in base_url:
+        return base_url
+    return f"{base_url.rstrip('/')}/chat/completions"
+
+
+def llm_api_request(payload, api_key, base_url, retries=3, provider="openai"):
+    api_key = normalize_api_key(api_key)
+    if not api_key:
+        showInfo(f"{provider.capitalize()} API key is missing. Open VocBuilderAI Settings and add it.")
+        return None
+
+    full_url = chat_completions_url(base_url)
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
     }
-    return defaults.get(provider, {})
+    if provider == "openrouter":
+        headers.update(
+            {
+                "HTTP-Referer": "https://ankiweb.net/shared/info/vocbuilderai",
+                "X-Title": "VocBuilderAI",
+            }
+        )
+
+    for attempt in range(retries):
+        try:
+            response = requests.post(full_url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            return response
+        except requests.exceptions.HTTPError as error:
+            if attempt < retries - 1:
+                time.sleep(2)
+                continue
+
+            try:
+                response_body = response.json()
+            except ValueError:
+                response_body = response.text
+            showInfo(
+                "LLM HTTP error:\n"
+                f"{error}\nStatus Code: {response.status_code}\nURL: {full_url}\nResponse: {response_body}"
+            )
+        except requests.exceptions.RequestException as error:
+            if attempt < retries - 1:
+                time.sleep(2)
+                continue
+            showInfo(f"LLM request error:\n{error}\nURL: {full_url}")
+    return None
+
 
 def generate_vocab_note(vocab_word: str, retries=3):
-    # get info from config
     provider = config.get("provider", "openai")
-    temperature = config.get("temperature", 0.5)
     provider_defaults = get_provider_defaults(provider)
-    
-    if provider == 'openai':
-        model = config.get("model") or provider_defaults['model']
-        api_key = config.get("openai_api_key") 
-        base_url = provider_defaults['base_url']
-    elif provider == 'deepseek':
-        model = config.get("model") or provider_defaults['model']
-        base_url = provider_defaults['base_url']
-        api_key = config.get("deepseek_api_key")
-    elif provider == 'groq':
-        model = config.get("model") or provider_defaults['model']
-        base_url = provider_defaults['base_url']
-        api_key = config.get("groq_api_key")
-    elif provider == 'openrouter':
-        model = config.get("model") or provider_defaults['model']
-        base_url = provider_defaults['base_url']
-        api_key = config.get("openrouter_api_key")
-    else:
-        raise ValueError(f"Unsupported provider: {provider}")
+    model = (config.get("model") or "").strip() or provider_defaults["model"]
+    api_key = config.get(provider_defaults["api_key_config"])
+    temperature = float(config.get("temperature", 0.5))
+    max_tokens = int(config.get("max_tokens", 15000))
 
     payload = {
         "model": model,
         "messages": [
             {
                 "role": "system",
-                "content": VOC_PROMPT if not is_japanese_vocab(vocab_word) else JPY_PROMPT
+                "content": JPY_PROMPT if is_japanese_vocab(vocab_word) else VOC_PROMPT,
             },
-            {
-                "role": "user",
-                "content": f"{vocab_word}"
-            }
+            {"role": "user", "content": str(vocab_word)},
         ],
         "temperature": temperature,
-        "response_format": {
-            "type": "json_object"
-        }
+        "max_tokens": max_tokens,
     }
+    if provider_defaults.get("supports_response_format"):
+        payload["response_format"] = {"type": "json_object"}
 
-    response = llm_api_request(payload, api_key, base_url)
-    if response:
-        response = response.json()
-        return response["choices"][0]["message"]["content"]
+    response = llm_api_request(
+        payload,
+        api_key,
+        provider_defaults["base_url"],
+        retries=retries,
+        provider=provider,
+    )
+    if response is None:
+        return None
 
-    
+    try:
+        response_json = response.json()
+        return response_json["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError, ValueError) as error:
+        showInfo(f"LLM returned an unexpected response shape:\n{error}")
+        return None
+
 
 def clean_response(response: str) -> str:
-    # Find the index of the marker
-    idx = response.find("```")
-    if idx == -1:
-        idx = response.find("```json")
-    
-    # If the marker is found, remove everything before it
-    if idx != -1:
-        response = response[idx + len("```"):]  # account for the length of the marker
-        if response.startswith("json"):
-            response = response[len("json"):]
+    if response is None:
+        return ""
+    response = str(response).strip()
 
-    # Remove the ending marker if present
-    if response.endswith("```"):
-        response = response[: -len("```")]
+    fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", response, re.DOTALL | re.IGNORECASE)
+    if fence_match:
+        return fence_match.group(1).strip()
 
-    return response.strip()
+    first_brace = response.find("{")
+    last_brace = response.rfind("}")
+    if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
+        return response[first_brace : last_brace + 1].strip()
+
+    return response
 
 
-def process_response(response :str) -> dict:
+def process_response(response: str) -> dict:
     cleaned_response = clean_response(response)
-    try:
-        return json.loads(cleaned_response)
-    except json.JSONDecodeError as e:
-        showInfo(f"Failed to parse note data: {e}\nContent: {cleaned_response}")
+    if not cleaned_response:
+        showInfo("No note data was returned by the LLM.")
         return {}
-
-
-# "add note" window
-def on_add_note(editor: Editor):
-    vocab_word = editor.note.fields[0]  # Assumes the first field is 'vocabulary'
-
-    if not vocab_word:
-        showInfo(
-            "No vocabulary word entered. Please enter a word in the 'vocabulary' field."
-        )
-        return
     try:
-        response = generate_vocab_note(vocab_word)
+        parsed = json.loads(cleaned_response)
+    except json.JSONDecodeError as error:
+        showInfo(f"Failed to parse note data: {error}\nContent: {cleaned_response}")
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def html_text(value, fallback=""):
+    if value is None:
+        return fallback
+    return str(value)
+
+
+def as_dict(value):
+    return value if isinstance(value, dict) else {}
+
+
+def as_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
+def join_values(value):
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value if item is not None)
+    return html_text(value)
+
+
+def format_vocabulary_html(word):
+    return f"<h2>{html_text(word)}</h2>"
+
+
+def format_pronunciations_html(pronunciation):
+    return f"<h3>Pronunciation:</h3><p>{html_text(pronunciation, 'N/A')}</p>"
+
+
+def format_sound_html(sound_link):
+    sound_link = html_text(sound_link)
+    if not sound_link:
+        return "<h3>Sound:</h3><p>N/A</p>"
+    return f"<h3>Sound:</h3><a href='{sound_link}'>Listen</a>"
+
+
+def format_meanings_html(meanings):
+    meanings = as_dict(meanings)
+    html_content = "<h3>Meanings:</h3><ul>"
+    if not meanings:
+        html_content += "<li>N/A</li>"
+    for lang, meaning in meanings.items():
+        html_content += f"<li><b>{html_text(lang).capitalize()}:</b> {html_text(meaning)}</li>"
+    html_content += "</ul><br>"
+    return html_content
+
+
+forms_mapping = {
+    "verb": join_values,
+    "adjective": join_values,
+    "noun": join_values,
+}
+
+
+def format_definitions_html(definitions):
+    html_content = "<h3>Definitions:</h3><ol>"
+    definitions = as_list(definitions)
+    if not definitions:
+        html_content += "<li>No definition</li>"
+    for definition in definitions:
+        if isinstance(definition, str):
+            html_content += f"<li><b>{definition}</b></li>"
+            continue
+
+        definition = as_dict(definition)
+        html_content += f"<li><b>{html_text(definition.get('text'), 'No definition')}</b>"
+        grammatical_info = as_dict(definition.get("grammaticalInfo"))
+        part_of_speech = grammatical_info.get("partOfSpeech")
+        if part_of_speech:
+            html_content += f" <i>({part_of_speech})</i>"
+
+        forms = as_dict(grammatical_info.get("forms"))
+        if forms:
+            html_content += "<ul>"
+            for form, values in forms.items():
+                values_str = forms_mapping.get(form, join_values)(values)
+                html_content += f"<li><b>{html_text(form).capitalize()}:</b> {values_str}</li>"
+            html_content += "</ul>"
+        html_content += "</li>"
+    html_content += "</ol>"
+    return html_content
+
+
+def format_etymology_html(etymology):
+    return f"<h3>Etymology:</h3><p>{html_text(etymology, 'N/A')}</p><br>"
+
+
+def format_synonyms_html(synonyms):
+    html_content = "<h3>Synonyms:</h3><ol>"
+    for synonym in as_list(synonyms):
+        html_content += f"<li>{html_text(synonym)}</li>"
+    html_content += "</ol><br>"
+    return html_content
+
+
+def format_antonyms_html(antonyms):
+    html_content = "<h3>Antonyms:</h3><ol>"
+    for antonym in as_list(antonyms):
+        html_content += f"<li>{html_text(antonym)}</li>"
+    html_content += "</ol><br>"
+    return html_content
+
+
+def format_examples_html(vocab_word, examples):
+    html_content = "<h3>Real-world Examples:</h3><ul>"
+    for example in as_list(examples):
+        example = html_text(example)
+        bold_word = example.replace(str(vocab_word), f"<strong>{vocab_word}</strong>")
+        html_content += f"<li>{bold_word}</li>"
+    html_content += "</ul>"
+    return html_content
+
+
+def format_kanji_html(kanji):
+    return f"<h3>Kanji:</h3><p>{html_text(kanji, 'N/A')}</p>"
+
+
+def format_furigana_html(furigana):
+    return f"<h3>Furigana:</h3><p>{html_text(furigana, 'N/A')}</p>"
+
+
+def format_pitchPattern_html(pitchPattern):
+    return f"<h3>Pitch Pattern:</h3><p>{html_text(pitchPattern, 'N/A')}</p>"
+
+
+def format_explanations_html(explanations):
+    explanations = as_dict(explanations)
+    return (
+        "<h3>Explanations:</h3>"
+        f"<p>en-US: {html_text(explanations.get('en-US'), 'N/A')}</p>"
+        f"<p>zh-TW: {html_text(explanations.get('zh-TW'), 'N/A')}</p>"
+    )
+
+
+def format_partsOfSpeech_html(partsOfSpeech):
+    return f"<h3>Parts of Speech:</h3><p>{html_text(partsOfSpeech, 'N/A')}</p>"
+
+
+def format_rule_group(title, rules, preferred_order=None):
+    rules = as_dict(rules)
+    if not rules:
+        return ""
+
+    html_content = f"<h4>{title}:</h4>"
+    keys = preferred_order or list(rules.keys())
+    rendered_keys = set()
+    for key in keys:
+        if key in rules and rules[key]:
+            html_content += f"<p>{key}: {join_values(rules[key])}</p>"
+            rendered_keys.add(key)
+    for key, value in rules.items():
+        if key not in rendered_keys and value:
+            html_content += f"<p>{key}: {join_values(value)}</p>"
+    return html_content
+
+
+def format_grammaticalRules_html(grammaticalRules: dict):
+    grammaticalRules = as_dict(grammaticalRules)
+    html_content = "<h3>Grammatical Rules:</h3>"
+
+    sections = [
+        (
+            "verbs",
+            "verbs",
+            [
+                "PlainForm",
+                "PoliteForm",
+                "NegativeForm",
+                "PastTense",
+                "TeForm",
+                "PotentialForm",
+                "CausativeForm",
+                "PassiveForm",
+            ],
+        ),
+        (
+            "adjectives",
+            "adjectives",
+            ["NegativeForm", "PastPositiveForm", "PastNegativeForm", "TeForm"],
+        ),
+        ("nouns", "nouns", ["Variations", "Examples"]),
+        ("others", "others", None),
+    ]
+
+    rendered_any = False
+    for key, title, preferred_order in sections:
+        rendered = format_rule_group(title, grammaticalRules.get(key), preferred_order)
+        if rendered:
+            html_content += rendered
+            rendered_any = True
+
+    if not rendered_any:
+        html_content += "<p>No grammatical rules found.</p>"
+    return html_content
+
+
+def format_exampleSentences_html(exampleSentences):
+    html_content = "<h3>Example Sentences:</h3><ol>"
+    for exampleSentence in as_list(exampleSentences):
+        if isinstance(exampleSentence, str):
+            sentence = exampleSentence
+            translation = ""
+        else:
+            exampleSentence = as_dict(exampleSentence)
+            sentence = exampleSentence.get("sentence", "")
+            translation = (
+                exampleSentence.get("translation")
+                or exampleSentence.get("translation in zh-tw")
+                or exampleSentence.get("translationInZhTw")
+                or ""
+            )
+        html_content += f"<li><strong>{html_text(sentence)}</strong>"
+        if translation:
+            html_content += f" - {html_text(translation)}"
+        html_content += "</li>"
+    html_content += "</ol>"
+    return html_content
+
+
+def generate_speech(vocab_word, retries=3):
+    api_key = normalize_api_key(config.get("openai_api_key"))
+    if not api_key:
+        return None
+
+    base_url = "https://api.openai.com/v1"
+    temp_file_path = None
+    payload = {}
+    for attempt in range(retries):
         try:
-            note_data = json.loads(response)
-        except json.JSONDecodeError:
-            note_data = process_response(response)
+            hashed_vocab = hashlib.md5(str(vocab_word).encode()).hexdigest()
+            temp_file_path = Path(__file__).parent / f"vocbuilderai-{hashed_vocab}.mp3"
+            random_voice = [
+                "alloy",
+                "ash",
+                "ballad",
+                "coral",
+                "echo",
+                "fable",
+                "nova",
+                "onyx",
+                "sage",
+                "shimmer",
+            ]
+            speech_voice = config.get("speech_voice") or random.choice(random_voice)
+            speech_model = config.get("speech_model") or "gpt-4o-mini-tts"
+            input_text = str(vocab_word)
+
+            payload = {
+                "model": speech_model,
+                "voice": speech_voice,
+                "input": input_text,
+                "instructions": "Speak clearly and naturally. Use Japanese pronunciation for Japanese text.",
+                "speed": float(config.get("speech_speed", 1.0)),
+            }
+
+            response = requests.post(
+                f"{base_url}/audio/speech",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=60,
+            )
+            response.raise_for_status()
+
+            with open(temp_file_path, "wb") as audio_file:
+                audio_file.write(response.content)
+
+            final_file_name = mw.col.media.addFile(temp_file_path)
+            temp_file_path.unlink(missing_ok=True)
+            return final_file_name
+        except Exception as error:
+            if attempt < retries - 1:
+                time.sleep(2)
+                continue
+            showInfo(f"Speech Error:\n{error}\nPayload: {payload}")
+            if temp_file_path:
+                temp_file_path.unlink(missing_ok=True)
+            return None
 
 
-        # Check if note_data is a dictionary and has necessary keys
-        if isinstance(note_data, dict) and not is_japanese_vocab(vocab_word):
-            # Populate the fields in the editor
-            editor.note["vocabulary"] = format_vocabulary_html(note_data["word"])
-            editor.note["Pronunciations"] = format_pronunciations_html(
-                note_data["pronunciation"]
-            )
-            sound = generate_speech(note_data['word'])
-            editor.note["Sound"] = (
-                format_sound_html(note_data["soundLink"])
-                + f"<br>[sound:{sound}]"
-            )
-            editor.note["detail definition"] = format_meanings_html(
-                note_data["meanings"]
-            ) + format_definitions_html(note_data["definitions"])
-            editor.note["Etymology, Synonyms and Antonyms"] = (
-                format_etymology_html(note_data["etymology"])
-                + format_synonyms_html(note_data["synonyms"])
-                + format_antonyms_html(note_data["antonyms"])
-            )
-            editor.note["Real-world examples"] = format_examples_html(
-                note_data["word"], note_data["realWorldExamples"]
-            )
-            # Update the editor to reflect these changes
-            editor.loadNote()
-        if isinstance(note_data, dict) and is_japanese_vocab(vocab_word):
-            # Populate the fields in the editor
-            editor.note["vocabulary"] = format_vocabulary_html(note_data["vocabulary"])
-            editor.note["Pronunciations"] = format_partsOfSpeech_html(note_data["partsOfSpeech"]) + format_pronunciations_html(note_data["pronunciations"])
-            sound = generate_speech(note_data['vocabulary'])
-            editor.note["Sound"] = format_sound_html(note_data["sound"]) + f"<br>[sound:{ sound }]"
-            editor.note["detail definition"] = (
-                format_kanji_html(note_data["kanji"]) 
-                + "<br>" + format_furigana_html(note_data["furigana"]) 
-                + "<br>" + format_meanings_html(note_data["explanations"]) 
-                + "<br>" + format_explanations_html(note_data["explanations"])
-            )
-            editor.note["Etymology, Synonyms and Antonyms"] = format_grammaticalRules_html(note_data["grammaticalRules"])
-            editor.note["Real-world examples"] = format_exampleSentences_html(note_data["exampleSentences"])
-            #add tags to this note
-            
-            editor.loadNote()
-    except Exception as e:
-        showInfo(f"Error on add note: {e}")
+def sound_reference(sound_file):
+    return f"<br>[sound:{sound_file}]" if sound_file else ""
+
+
+def populate_english_note(editor, note_data):
+    word = note_data.get("word") or editor.note.fields[0]
+    editor.note["vocabulary"] = format_vocabulary_html(word)
+    editor.note["Pronunciations"] = format_pronunciations_html(note_data.get("pronunciation"))
+    sound = generate_speech(word)
+    editor.note["Sound"] = format_sound_html(note_data.get("soundLink")) + sound_reference(sound)
+    editor.note["detail definition"] = format_meanings_html(note_data.get("meanings")) + format_definitions_html(
+        note_data.get("definitions")
+    )
+    editor.note["Etymology, Synonyms and Antonyms"] = (
+        format_etymology_html(note_data.get("etymology"))
+        + format_synonyms_html(note_data.get("synonyms"))
+        + format_antonyms_html(note_data.get("antonyms"))
+    )
+    editor.note["Real-world examples"] = format_examples_html(word, note_data.get("realWorldExamples"))
+
+
+def populate_japanese_note(editor, note_data):
+    vocabulary = note_data.get("vocabulary") or note_data.get("word") or editor.note.fields[0]
+    explanations = note_data.get("explanations")
+    sound = generate_speech(vocabulary)
+
+    editor.note["vocabulary"] = format_vocabulary_html(vocabulary)
+    editor.note["Pronunciations"] = format_partsOfSpeech_html(
+        note_data.get("partsOfSpeech")
+    ) + format_pronunciations_html(note_data.get("pronunciations"))
+    editor.note["Sound"] = format_sound_html(note_data.get("sound")) + sound_reference(sound)
+    editor.note["detail definition"] = (
+        format_kanji_html(note_data.get("kanji", vocabulary))
+        + "<br>"
+        + format_furigana_html(note_data.get("furigana"))
+        + "<br>"
+        + format_pitchPattern_html(note_data.get("pitchPattern"))
+        + "<br>"
+        + format_meanings_html(explanations)
+        + "<br>"
+        + format_explanations_html(explanations)
+    )
+    editor.note["Etymology, Synonyms and Antonyms"] = format_grammaticalRules_html(
+        note_data.get("grammaticalRules")
+    )
+    editor.note["Real-world examples"] = format_exampleSentences_html(note_data.get("exampleSentences"))
+
+
+def on_add_note(editor: Editor):
+    vocab_word = editor.note.fields[0]
+    if not vocab_word:
+        showInfo("No vocabulary word entered. Please enter a word in the 'vocabulary' field.")
         return
+
+    response = generate_vocab_note(vocab_word)
+    note_data = process_response(response)
+    if not note_data:
+        return
+
+    try:
+        if is_japanese_vocab(vocab_word):
+            populate_japanese_note(editor, note_data)
+        else:
+            populate_english_note(editor, note_data)
+        editor.loadNote()
+    except Exception as error:
+        showInfo(f"Error on add note: {error}")
+
+
+def add_note_to_deck(deck_name, tag_name, note_data):
+    if not ANKI_AVAILABLE:
+        raise RuntimeError("Anki is required to add notes to a deck.")
+
+    did = mw.col.decks.id(deck_name)
+    mw.col.decks.select(did)
+
+    model = mw.col.models.byName(config.get("note_type", "vocbuilderAI"))
+    mw.col.models.setCurrent(model)
+
+    note = Note(mw.col, model)
+    if is_japanese_vocab(note_data.get("vocabulary") or note_data.get("word")):
+        class _Editor:
+            pass
+
+        editor = _Editor()
+        editor.note = note
+        editor.note.fields = [note_data.get("vocabulary") or note_data.get("word")]
+        populate_japanese_note(editor, note_data)
+    else:
+        class _Editor:
+            pass
+
+        editor = _Editor()
+        editor.note = note
+        editor.note.fields = [note_data.get("word")]
+        populate_english_note(editor, note_data)
+
+    note.addTag(tag_name)
+    mw.col.addNote(note)
+    mw.col.decks.save()
+    mw.col.save()
 
 
 def add_action_button(buttons, editor: Editor):
-    icon_path = None
-    action = QAction("Generate Content", editor.widget)
-    action.triggered.connect(lambda _, e=editor:on_add_note(e))
-    # editor._links["generate_vocab_content"] = lambda _, e=editor: on_add_note(e)
-
     button = editor.addButton(
-        icon=None,  # if icon_path is None else QIcon(icon_path),
-        label="VocAI",  # None if icon_path is not None else "Generate",
+        icon=None,
+        label="VocAI",
         cmd="generate_vocab_content",
         func=lambda _, e=editor: on_add_note(e),
-        tip="Generate content for vocabulary",
+        tip="Generate vocabulary content",
         keys=None,
     )
     buttons.append(button)
     return buttons
 
 
-gui_hooks.editor_did_init_buttons.append(add_action_button)
+if ANKI_AVAILABLE:
+    gui_hooks.editor_did_init_buttons.append(add_action_button)
 
 
-class ConfigDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("VocBuilderAI Configuration")
-        self.setup_ui()
-        self.load_config()
+if ANKI_AVAILABLE:
 
-    def setup_ui(self):
-        layout = QVBoxLayout()
-        form_layout = QFormLayout()
+    class ConfigDialog(QDialog):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.setWindowTitle("VocBuilderAI Settings")
+            self.setMinimumWidth(560)
+            self.setup_ui()
+            self.load_config()
+            self.update_provider_hints()
 
-        # Provider selection
-        self.provider = QComboBox()
-        self.provider.addItems(["openai", "deepseek", "groq", "openrouter"])
-        form_layout.addRow("Provider:", self.provider)
+        def setup_ui(self):
+            layout = QVBoxLayout(self)
+            self.tabs = QTabWidget()
 
-        # API Keys
-        self.openai_key = QLineEdit()
-        self.deepseek_key = QLineEdit()
-        self.groq_key = QLineEdit()
-        self.openrouter_key = QLineEdit()
-        form_layout.addRow("OpenAI API Key:", self.openai_key)
-        form_layout.addRow("Deepseek API Key:", self.deepseek_key)
-        form_layout.addRow("Groq API Key:", self.groq_key)
-        form_layout.addRow("OpenRouter API Key:", self.openrouter_key)
+            self.provider = QComboBox()
+            self.provider.addItems(list(PROVIDER_DEFAULTS.keys()))
+            self.provider.currentTextChanged.connect(self.update_provider_hints)
 
-        # Model
-        self.model = QLineEdit()
-        form_layout.addRow("Model:", self.model)
+            self.model = QLineEdit()
+            self.use_default_model = QCheckBox("Use provider default when model is blank")
+            self.use_default_model.setChecked(True)
+            use_default_button = QPushButton("Use default")
+            use_default_button.clicked.connect(self.apply_default_model)
 
-        # Temperature
-        self.temperature = QDoubleSpinBox()
-        self.temperature.setRange(0.0, 2.0)
-        self.temperature.setSingleStep(0.1)
-        form_layout.addRow("Temperature:", self.temperature)
+            model_row = QHBoxLayout()
+            model_row.addWidget(self.model)
+            model_row.addWidget(use_default_button)
 
-        # Speech settings
-        self.speech_voice = QComboBox()
-        self.speech_voice.addItems(["", "alloy", "echo", "fable", "onyx", "nova", "shimmer"])
-        form_layout.addRow("Speech Voice:", self.speech_voice)
+            self.temperature = QDoubleSpinBox()
+            self.temperature.setRange(0.0, 2.0)
+            self.temperature.setSingleStep(0.1)
+            self.temperature.setDecimals(2)
 
-        self.speech_model = QLineEdit()
-        form_layout.addRow("Speech Model:", self.speech_model)
+            self.max_tokens = QDoubleSpinBox()
+            self.max_tokens.setRange(512, 32000)
+            self.max_tokens.setSingleStep(512)
+            self.max_tokens.setDecimals(0)
 
-        self.speech_speed = QDoubleSpinBox()
-        self.speech_speed.setRange(0.25, 4.0)
-        self.speech_speed.setSingleStep(0.25)
-        form_layout.addRow("Speech Speed:", self.speech_speed)
+            self.provider_hint = QLabel()
+            self.provider_hint.setWordWrap(True)
 
-        # Default deck and tag
-        self.default_deck = QLineEdit()
-        self.default_tag = QLineEdit()
-        form_layout.addRow("Default Deck:", self.default_deck)
-        form_layout.addRow("Default Tag:", self.default_tag)
+            generation_tab = QWidget()
+            generation_layout = QVBoxLayout(generation_tab)
+            provider_group = QGroupBox("Generation")
+            provider_form = QFormLayout(provider_group)
+            provider_form.addRow("Provider", self.provider)
+            provider_form.addRow("Model", model_row)
+            provider_form.addRow("", self.use_default_model)
+            provider_form.addRow("Temperature", self.temperature)
+            provider_form.addRow("Max tokens", self.max_tokens)
+            provider_form.addRow("Current default", self.provider_hint)
+            generation_layout.addWidget(provider_group)
+            generation_layout.addStretch()
+            self.tabs.addTab(generation_tab, "Generation")
 
-        layout.addLayout(form_layout)
+            self.openai_key = self.api_key_input()
+            self.deepseek_key = self.api_key_input()
+            self.groq_key = self.api_key_input()
+            self.openrouter_key = self.api_key_input()
 
-        # Buttons
-        buttons = QHBoxLayout()
-        save_button = QPushButton("Save")
-        save_button.clicked.connect(self.save_config)
-        cancel_button = QPushButton("Cancel")
-        cancel_button.clicked.connect(self.reject)
-        buttons.addWidget(save_button)
-        buttons.addWidget(cancel_button)
-        layout.addLayout(buttons)
+            keys_tab = QWidget()
+            keys_layout = QVBoxLayout(keys_tab)
+            keys_group = QGroupBox("API Keys")
+            keys_form = QFormLayout(keys_group)
+            keys_form.addRow("OpenAI", self.openai_key)
+            keys_form.addRow("DeepSeek", self.deepseek_key)
+            keys_form.addRow("Groq", self.groq_key)
+            keys_form.addRow("OpenRouter", self.openrouter_key)
+            keys_layout.addWidget(keys_group)
+            keys_layout.addStretch()
+            self.tabs.addTab(keys_tab, "API Keys")
 
-        self.setLayout(layout)
+            self.default_deck = QLineEdit()
+            self.default_tag = QLineEdit()
+            self.note_type = QLineEdit()
 
-    def load_config(self):
-        self.provider.setCurrentText(config.get("provider", "openai"))
-        self.openai_key.setText(config.get("openai_api_key", ""))
-        self.deepseek_key.setText(config.get("deepseek_api_key", ""))
-        self.groq_key.setText(config.get("groq_api_key", ""))
-        self.openrouter_key.setText(config.get("openrouter_api_key", ""))
-        self.model.setText(config.get("model", ""))
-        self.temperature.setValue(float(config.get("temperature", 0.5)))
-        self.speech_voice.setCurrentText(config.get("speech_voice", ""))
-        self.speech_model.setText(config.get("speech_model", "tts-1-hd"))
-        self.speech_speed.setValue(float(config.get("speech_speed", 1.0)))
-        self.default_deck.setText(config.get("default_deck", "Big"))
-        self.default_tag.setText(config.get("default_tag", "vocabulary::wordoftheday"))
+            anki_tab = QWidget()
+            anki_layout = QVBoxLayout(anki_tab)
+            anki_group = QGroupBox("Anki Defaults")
+            anki_form = QFormLayout(anki_group)
+            anki_form.addRow("Default deck", self.default_deck)
+            anki_form.addRow("Default tag", self.default_tag)
+            anki_form.addRow("Note type", self.note_type)
+            anki_layout.addWidget(anki_group)
+            anki_layout.addStretch()
+            self.tabs.addTab(anki_tab, "Anki")
 
-    def save_config(self):
-        new_config = {
-            "provider": self.provider.currentText(),
-            "openai_api_key": self.openai_key.text(),
-            "deepseek_api_key": self.deepseek_key.text(),
-            "groq_api_key": self.groq_key.text(),
-            "openrouter_api_key": self.openrouter_key.text(),
-            "model": self.model.text(),
-            "temperature": self.temperature.value(),
-            "speech_voice": self.speech_voice.currentText(),
-            "speech_model": self.speech_model.text(),
-            "speech_speed": self.speech_speed.value(),
-            "default_deck": self.default_deck.text(),
-            "default_tag": self.default_tag.text(),
-        }
-        
-        # Update config in memory and save to disk
-        global config
-        config.update(new_config)
-        mw.addonManager.writeConfig(__name__, new_config)
-        self.accept()
+            self.speech_voice = QComboBox()
+            self.speech_voice.addItems(
+                ["", "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"]
+            )
+            self.speech_model = QLineEdit()
+            self.speech_speed = QDoubleSpinBox()
+            self.speech_speed.setRange(0.25, 4.0)
+            self.speech_speed.setSingleStep(0.25)
+            self.speech_speed.setDecimals(2)
 
-def show_config():
-    dialog = ConfigDialog(mw)
-    dialog.exec()
+            speech_tab = QWidget()
+            speech_layout = QVBoxLayout(speech_tab)
+            speech_group = QGroupBox("Speech")
+            speech_form = QFormLayout(speech_group)
+            speech_form.addRow("Voice", self.speech_voice)
+            speech_form.addRow("Model", self.speech_model)
+            speech_form.addRow("Speed", self.speech_speed)
+            speech_layout.addWidget(speech_group)
+            speech_layout.addStretch()
+            self.tabs.addTab(speech_tab, "Speech")
 
-# Add menu item
-config_action = QAction("VocBuilderAI Settings", mw)
-config_action.triggered.connect(show_config)
-mw.form.menuTools.addAction(config_action)
+            layout.addWidget(self.tabs)
+
+            buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+            buttons.accepted.connect(self.save_config)
+            buttons.rejected.connect(self.reject)
+            layout.addWidget(buttons)
+
+        def api_key_input(self):
+            field = QLineEdit()
+            field.setEchoMode(QLineEdit.EchoMode.Password)
+            field.setClearButtonEnabled(True)
+            return field
+
+        def update_provider_hints(self):
+            provider = self.provider.currentText()
+            defaults = get_provider_defaults(provider)
+            self.model.setPlaceholderText(defaults["model"])
+            self.provider_hint.setText(f"{defaults['model']} at {defaults['base_url']}")
+
+        def apply_default_model(self):
+            self.model.setText(get_provider_defaults(self.provider.currentText())["model"])
+
+        def load_config(self):
+            self.provider.setCurrentText(config.get("provider", "openai"))
+            self.openai_key.setText(config.get("openai_api_key", ""))
+            self.deepseek_key.setText(config.get("deepseek_api_key", ""))
+            self.groq_key.setText(config.get("groq_api_key", ""))
+            self.openrouter_key.setText(config.get("openrouter_api_key", ""))
+            self.model.setText(config.get("model", ""))
+            self.temperature.setValue(float(config.get("temperature", 0.5)))
+            self.max_tokens.setValue(float(config.get("max_tokens", 15000)))
+            self.speech_voice.setCurrentText(config.get("speech_voice", ""))
+            self.speech_model.setText(config.get("speech_model", "gpt-4o-mini-tts"))
+            self.speech_speed.setValue(float(config.get("speech_speed", 1.0)))
+            self.default_deck.setText(config.get("default_deck", "Big"))
+            self.default_tag.setText(config.get("default_tag", "vocabulary::wordoftheday"))
+            self.note_type.setText(config.get("note_type", "vocbuilderAI"))
+
+        def save_config(self):
+            new_config = {
+                "provider": self.provider.currentText(),
+                "openai_api_key": self.openai_key.text().strip(),
+                "deepseek_api_key": self.deepseek_key.text().strip(),
+                "groq_api_key": self.groq_key.text().strip(),
+                "openrouter_api_key": self.openrouter_key.text().strip(),
+                "model": self.model.text().strip(),
+                "temperature": self.temperature.value(),
+                "max_tokens": int(self.max_tokens.value()),
+                "speech_voice": self.speech_voice.currentText(),
+                "speech_model": self.speech_model.text().strip() or "gpt-4o-mini-tts",
+                "speech_speed": self.speech_speed.value(),
+                "default_deck": self.default_deck.text().strip() or "Big",
+                "default_tag": self.default_tag.text().strip() or "vocabulary::wordoftheday",
+                "note_type": self.note_type.text().strip() or "vocbuilderAI",
+            }
+
+            global config
+            config.update(new_config)
+            mw.addonManager.writeConfig(__name__, new_config)
+            self.accept()
+
+
+    def show_config():
+        dialog = ConfigDialog(mw)
+        dialog.exec()
+
+
+    config_action = QAction("VocBuilderAI Settings", mw)
+    config_action.triggered.connect(show_config)
+    mw.form.menuTools.addAction(config_action)
