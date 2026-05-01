@@ -110,6 +110,8 @@ def test_openrouter_generation_omits_response_format(monkeypatch):
     assert json.loads(result) == {"vocabulary": "近い"}
     assert captured["provider"] == "openrouter"
     assert captured["payload"]["model"] == "openai/gpt-4o-mini"
+    assert captured["payload"]["max_tokens"] == 15000
+    assert "max_completion_tokens" not in captured["payload"]
     assert "response_format" not in captured["payload"]
 
 
@@ -133,7 +135,9 @@ def test_openai_generation_includes_json_response_format(monkeypatch):
 
     assert json.loads(result) == {"word": "apple"}
     assert captured["provider"] == "openai"
-    assert captured["payload"]["model"] == "gpt-4o-mini"
+    assert captured["payload"]["model"] == "5.4-nano"
+    assert captured["payload"]["max_completion_tokens"] == 15000
+    assert "max_tokens" not in captured["payload"]
     assert captured["payload"]["response_format"] == {"type": "json_object"}
 
 

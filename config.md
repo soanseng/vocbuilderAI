@@ -23,7 +23,7 @@
 - openrouter_api_key: OpenRouter API key from https://openrouter.ai
 - provider: LLM provider to use (openai, deepseek, groq, or openrouter)
 - model: Model name for the selected provider:
-  - OpenAI: gpt-4o-mini, gpt-4.1-mini, etc.
+  - OpenAI default: 5.4-nano
   - Deepseek: deepseek-chat
   - Groq: llama-3.3-70b-versatile
   - OpenRouter: openai/gpt-4o-mini, anthropic/claude-3.5-sonnet, etc.

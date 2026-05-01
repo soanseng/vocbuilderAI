@@ -80,28 +80,32 @@ CONFIG_DEFAULTS = {
 
 PROVIDER_DEFAULTS = {
     "openai": {
-        "model": "gpt-4o-mini",
+        "model": "5.4-nano",
         "base_url": "https://api.openai.com/v1",
         "api_key_config": "openai_api_key",
         "supports_response_format": True,
+        "token_param": "max_completion_tokens",
     },
     "deepseek": {
         "model": "deepseek-chat",
         "base_url": "https://api.deepseek.com",
         "api_key_config": "deepseek_api_key",
         "supports_response_format": True,
+        "token_param": "max_tokens",
     },
     "groq": {
         "model": "llama-3.3-70b-versatile",
         "base_url": "https://api.groq.com/openai/v1/chat/completions",
         "api_key_config": "groq_api_key",
         "supports_response_format": True,
+        "token_param": "max_tokens",
     },
     "openrouter": {
         "model": "openai/gpt-4o-mini",
         "base_url": "https://openrouter.ai/api/v1/chat/completions",
         "api_key_config": "openrouter_api_key",
         "supports_response_format": False,
+        "token_param": "max_tokens",
     },
 }
 
@@ -211,7 +215,7 @@ def generate_vocab_note(vocab_word: str, retries=3):
             {"role": "user", "content": str(vocab_word)},
         ],
         "temperature": temperature,
-        "max_tokens": max_tokens,
+        provider_defaults.get("token_param", "max_tokens"): max_tokens,
     }
     if provider_defaults.get("supports_response_format"):
         payload["response_format"] = {"type": "json_object"}
