@@ -8,7 +8,6 @@ VocabBuilderAI is an Anki add-on that enhances vocabulary learning by integratin
 
 ### Supported LLM Providers
 - OpenAI
-- DeepSeek
 - Groq
 - OpenRouter
 
@@ -18,7 +17,7 @@ Model names change quickly, so VocBuilderAI lets you type any chat-completions c
 For the best results in 2026, use a current general-purpose model with strong JSON output and multilingual support. Recommended starting points:
 - OpenAI: use the current small or flagship GPT model for balanced cost and quality.
 - OpenRouter: choose a recent high-quality model with Japanese and Traditional Chinese support.
-- DeepSeek or Groq: use their current chat/reasoning model if you prefer lower cost or faster generation.
+- Groq: use its current chat/reasoning model if you prefer faster generation.
 
 Leave the model field blank to use VocBuilderAI's provider default. If Japanese output is incomplete, switch to a stronger multilingual model before raising temperature.
 
@@ -61,8 +60,8 @@ Create a note type called "vocbuilderAI" with these fields:
 ### Configuration
 1. Go to Tools -> VocBuilderAI Settings
 2. Configure:
-   - API keys (OpenAI/Deepseek/Groq/OpenRouter)
-   - LLM provider selection (OpenAI, Deepseek, Groq, OpenRouter)
+   - API keys (OpenAI/Groq/OpenRouter)
+   - LLM provider selection (OpenAI, Groq, OpenRouter)
    - Default deck and note type
    - Temperature and other model settings
    - Text-to-speech preferences
@@ -76,7 +75,6 @@ VocabBuilderAI 是一款 Anki 擴充功能，透過整合多個 LLM 供應商來
 
 ### 支援的 LLM 供應商
 - OpenAI
-- DeepSeek
 - Groq
 - OpenRouter
 
@@ -86,7 +84,7 @@ VocabBuilderAI 是一款 Anki 擴充功能，透過整合多個 LLM 供應商來
 2026 年建議優先選擇 JSON 輸出穩定、日文與繁體中文能力好的通用模型：
 - OpenAI：使用當前的小型或旗艦 GPT 模型，在成本與品質之間通常最穩。
 - OpenRouter：選擇近期品質高、明確支援日文與繁體中文的模型。
-- DeepSeek 或 Groq：如果你重視成本或速度，可以使用它們當前的 chat/reasoning 模型。
+- Groq：如果你重視速度，可以使用它目前的 chat/reasoning 模型。
 
 Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如果日文輸出不完整，先換成更強的多語模型，再考慮調高 temperature。
 
@@ -120,8 +118,8 @@ Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如
 ### 設定選項
 1. 前往 工具 -> VocBuilderAI Settings
 2. 設定以下項目：
-   - API 金鑰 (OpenAI/Deepseek/Groq/OpenRouter)
-   - LLM 供應商選擇 (OpenAI, Deepseek, Groq, OpenRouter)
+   - API 金鑰 (OpenAI/Groq/OpenRouter)
+   - LLM 供應商選擇 (OpenAI, Groq, OpenRouter)
    - 預設牌組和筆記類型
    - Temperature 和其他模型設定
    - 文字轉語音偏好

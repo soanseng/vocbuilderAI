@@ -63,7 +63,6 @@ except Exception:
 
 CONFIG_DEFAULTS = {
     "openai_api_key": "your-openai-key",
-    "deepseek_api_key": "your-deepseek-key",
     "groq_api_key": "your-groq-key",
     "openrouter_api_key": "your-openrouter-key",
     "default_deck": "Big",
@@ -86,13 +85,6 @@ PROVIDER_DEFAULTS = {
         "supports_response_format": True,
         "token_param": "max_completion_tokens",
     },
-    "deepseek": {
-        "model": "deepseek-chat",
-        "base_url": "https://api.deepseek.com",
-        "api_key_config": "deepseek_api_key",
-        "supports_response_format": True,
-        "token_param": "max_tokens",
-    },
     "groq": {
         "model": "llama-3.3-70b-versatile",
         "base_url": "https://api.groq.com/openai/v1/chat/completions",
@@ -111,7 +103,6 @@ PROVIDER_DEFAULTS = {
 
 PLACEHOLDER_KEYS = {
     "your-openai-key",
-    "your-deepseek-key",
     "your-groq-key",
     "your-openrouter-key",
 }
@@ -729,7 +720,6 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             self.tabs.addTab(generation_tab, "Generation")
 
             self.openai_key = self.api_key_input()
-            self.deepseek_key = self.api_key_input()
             self.groq_key = self.api_key_input()
             self.openrouter_key = self.api_key_input()
 
@@ -738,7 +728,6 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             keys_group = QGroupBox("API Keys")
             keys_form = QFormLayout(keys_group)
             keys_form.addRow("OpenAI", self.openai_key)
-            keys_form.addRow("DeepSeek", self.deepseek_key)
             keys_form.addRow("Groq", self.groq_key)
             keys_form.addRow("OpenRouter", self.openrouter_key)
             keys_layout.addWidget(keys_group)
@@ -806,7 +795,6 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
         def load_config(self):
             self.provider.setCurrentText(config.get("provider", "openai"))
             self.openai_key.setText(config.get("openai_api_key", ""))
-            self.deepseek_key.setText(config.get("deepseek_api_key", ""))
             self.groq_key.setText(config.get("groq_api_key", ""))
             self.openrouter_key.setText(config.get("openrouter_api_key", ""))
             self.model.setText(config.get("model", ""))
@@ -823,7 +811,6 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             new_config = {
                 "provider": self.provider.currentText(),
                 "openai_api_key": self.openai_key.text().strip(),
-                "deepseek_api_key": self.deepseek_key.text().strip(),
                 "groq_api_key": self.groq_key.text().strip(),
                 "openrouter_api_key": self.openrouter_key.text().strip(),
                 "model": self.model.text().strip(),

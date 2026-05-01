@@ -1,6 +1,5 @@
 {
     "openai_api_key": "your-openai-key",
-    "deepseek_api_key": "your-deepseek-key",
     "groq_api_key": "your-groq-key",
     "openrouter_api_key": "your-openrouter-key",
     "default_deck": "Big",
