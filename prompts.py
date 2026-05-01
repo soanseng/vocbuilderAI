@@ -114,3 +114,36 @@ Rules:
 - For a noun, fill "nouns" and leave unrelated groups empty.
 - Use Traditional Chinese, not Simplified Chinese.
 """
+
+MODE_INSTRUCTIONS = {
+    "concise": """
+Generation mode: Concise.
+- Return at most 2 definitions.
+- Return at most 2 synonyms and 2 antonyms.
+- Return at most 2 example sentences.
+- Keep explanations short and learner-focused.
+""",
+    "standard": """
+Generation mode: Standard.
+- Return balanced learner content.
+- Return 3 to 5 examples when useful.
+- Avoid overly long explanations.
+""",
+    "deep": """
+Generation mode: Deep.
+- Return richer definitions and usage notes.
+- Include useful nuance, register, and common learner pitfalls.
+- Return up to 5 examples when useful.
+""",
+    "japanese": """
+Generation mode: Japanese.
+- Prioritize stable Japanese readings, part of speech, pitch accent, grammar, and natural examples.
+- Use the exact "translation" key for every example sentence.
+- Use Traditional Chinese for translations.
+""",
+}
+
+
+def with_generation_mode(prompt, mode):
+    mode = (mode or "standard").strip().lower()
+    return f"{prompt.rstrip()}\n\n{MODE_INSTRUCTIONS.get(mode, MODE_INSTRUCTIONS['standard']).strip()}\n"

@@ -15,7 +15,12 @@ def load_addon():
 
 
 addon = load_addon()
+import llm
 import prompts
+
+
+def setup_function():
+    addon.GENERATION_CACHE.clear()
 
 
 class DummyNote(dict):
@@ -139,6 +144,62 @@ def test_openai_generation_includes_json_response_format(monkeypatch):
     assert captured["payload"]["max_completion_tokens"] == 15000
     assert "max_tokens" not in captured["payload"]
     assert captured["payload"]["response_format"] == {"type": "json_object"}
+
+
+def test_generate_vocab_note_reuses_recent_cache(monkeypatch):
+    calls = []
+
+    class Response:
+        def json(self):
+            return {"choices": [{"message": {"content": json.dumps({"word": "apple"})}}]}
+
+    def fake_request(*args, **kwargs):
+        calls.append("call")
+        return Response()
+
+    monkeypatch.setattr(addon, "llm_api_request", fake_request)
+    monkeypatch.setitem(addon.config, "provider", "openai")
+    monkeypatch.setitem(addon.config, "model", "")
+    monkeypatch.setitem(addon.config, "openai_api_key", "test-key")
+    monkeypatch.setitem(addon.config, "cache_enabled", True)
+
+    assert json.loads(addon.generate_vocab_note("apple")) == {"word": "apple"}
+    assert json.loads(addon.generate_vocab_note("apple")) == {"word": "apple"}
+    assert calls == ["call"]
+
+
+def test_generate_vocab_note_cache_can_be_disabled(monkeypatch):
+    calls = []
+
+    class Response:
+        def json(self):
+            return {"choices": [{"message": {"content": json.dumps({"word": "apple"})}}]}
+
+    def fake_request(*args, **kwargs):
+        calls.append("call")
+        return Response()
+
+    monkeypatch.setattr(addon, "llm_api_request", fake_request)
+    monkeypatch.setitem(addon.config, "provider", "openai")
+    monkeypatch.setitem(addon.config, "model", "")
+    monkeypatch.setitem(addon.config, "openai_api_key", "test-key")
+    monkeypatch.setitem(addon.config, "cache_enabled", False)
+
+    addon.generate_vocab_note("apple")
+    addon.generate_vocab_note("apple")
+
+    assert calls == ["call", "call"]
+
+
+def test_generation_cache_expires(monkeypatch):
+    cache_key = ("apple", "openai", "5.4-nano", "standard", 0.5, 15000)
+    monkeypatch.setitem(addon.config, "cache_enabled", True)
+    monkeypatch.setattr(addon.time, "time", lambda: 1000)
+    addon.set_cached_generation(cache_key, "cached")
+    monkeypatch.setattr(addon.time, "time", lambda: 1000 + addon.CACHE_TTL_SECONDS + 1)
+
+    assert addon.get_cached_generation(cache_key) is None
+    assert cache_key not in addon.GENERATION_CACHE
 
 
 def test_clean_response_extracts_json_from_preface():
@@ -579,3 +640,109 @@ def test_prompt_contracts_discourage_invalid_json():
 
     assert '"translation"' in prompts.JPY_PROMPT
     assert "translation in zh-tw" not in prompts.JPY_PROMPT
+
+
+def test_config_migration_recovers_from_removed_provider_and_fields():
+    migrated = addon.migrate_config(
+        {
+            "provider": "legacy_provider",
+            "legacy_provider_api_key": "secret",
+            "model": None,
+            "max_tokens": "not-int",
+            "temperature": "bad",
+            "speech_speed": "bad",
+            "generation_mode": "unknown",
+        }
+    )
+
+    assert migrated["provider"] == "openai"
+    assert "legacy_provider_api_key" not in migrated
+    assert migrated["model"] == ""
+    assert migrated["max_tokens"] == addon.CONFIG_DEFAULTS["max_tokens"]
+    assert migrated["temperature"] == addon.CONFIG_DEFAULTS["temperature"]
+    assert migrated["speech_speed"] == addon.CONFIG_DEFAULTS["speech_speed"]
+    assert migrated["generation_mode"] == "standard"
+
+
+def test_config_for_storage_keeps_only_supported_keys():
+    stored = addon.config_for_storage({"provider": "openrouter", "legacy_provider_api_key": "secret", "extra": "ignored"})
+
+    assert stored["provider"] == "openrouter"
+    assert "legacy_provider_api_key" not in stored
+    assert "extra" not in stored
+    assert set(stored) == set(addon.CONFIG_DEFAULTS)
+
+
+def test_prompt_for_vocab_applies_generation_mode(monkeypatch):
+    monkeypatch.setitem(addon.config, "generation_mode", "concise")
+
+    english_prompt = addon.prompt_for_vocab("apple")
+
+    assert "Generation mode: Concise" in english_prompt
+    assert "Return at most 2 definitions" in english_prompt
+
+    monkeypatch.setitem(addon.config, "generation_mode", "japanese")
+
+    japanese_prompt = addon.prompt_for_vocab("apple")
+
+    assert "You are a Japanese dictionary engine" in japanese_prompt
+    assert "Generation mode: Japanese" in japanese_prompt
+
+
+def test_run_api_health_check_validates_parsed_json(monkeypatch):
+    def fake_health_check(*args, **kwargs):
+        return llm.HealthCheckResult(True, json.dumps({"word": "apple"}))
+
+    monkeypatch.setattr(addon, "provider_health_check", fake_health_check)
+
+    result = addon.run_api_health_check("apple")
+
+    assert result.ok is True
+    assert "succeeded" in result.message
+
+
+def test_run_api_health_check_rejects_invalid_json(monkeypatch):
+    messages = []
+
+    def fake_health_check(*args, **kwargs):
+        return llm.HealthCheckResult(True, "not json")
+
+    monkeypatch.setattr(addon, "provider_health_check", fake_health_check)
+    monkeypatch.setattr(addon, "showInfo", messages.append)
+
+    result = addon.run_api_health_check("apple")
+
+    assert result.ok is False
+    assert "not valid note JSON" in result.message
+    assert messages and messages[0].startswith("Failed to parse note data")
+
+
+def test_run_japanese_json_health_check_normalizes_translation(monkeypatch):
+    payload = {
+        "vocabulary": "近い",
+        "exampleSentences": [{"sentence": "駅に近いです。", "translation in zh-tw": "離車站很近。"}],
+    }
+
+    def fake_health_check(*args, **kwargs):
+        return llm.HealthCheckResult(True, json.dumps(payload))
+
+    monkeypatch.setattr(addon, "provider_health_check", fake_health_check)
+
+    result = addon.run_japanese_json_health_check()
+
+    assert result.ok is True
+    assert "succeeded" in result.message
+
+
+def test_redact_payload_removes_secret_values():
+    payload = llm.redact_payload(
+        {
+            "Authorization": "Bearer secret",
+            "nested": {"openai_api_key": "sk-test"},
+            "safe": "value",
+        }
+    )
+
+    assert payload["Authorization"] == "[redacted]"
+    assert payload["nested"]["openai_api_key"] == "[redacted]"
+    assert payload["safe"] == "value"

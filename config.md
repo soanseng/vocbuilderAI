@@ -12,7 +12,9 @@
     "speech_voice": "",
     "speech_model": "gpt-4o-mini-tts",
     "speech_speed": 1.0,
-    "provider": "openai"
+    "provider": "openai",
+    "generation_mode": "standard",
+    "cache_enabled": true
 }
 ```
 
@@ -20,6 +22,8 @@
 - groq_api_key: Groq API key from https://console.groq.com
 - openrouter_api_key: OpenRouter API key from https://openrouter.ai
 - provider: LLM provider to use (openai, groq, or openrouter)
+- generation_mode: Card generation style (concise, standard, deep, or japanese)
+- cache_enabled: Reuse recent identical generations to avoid repeated API calls
 - model: Model name for the selected provider:
   - OpenAI default: 5.4-nano
   - Groq: llama-3.3-70b-versatile

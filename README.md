@@ -28,6 +28,10 @@ Leave the model field blank to use VocBuilderAI's provider default. If Japanese 
 - Comprehensive vocabulary flashcards
 - Multiple LLM provider support
 - Text-to-speech for pronunciation
+- Settings health checks for API, Japanese JSON, and text-to-speech
+- Generation modes for concise, standard, deep, or Japanese-focused cards
+- Safer JSON parsing and config migration for add-on upgrades
+- Short-lived cache for repeated identical generations
 - Customizable decks, card types, and tags
 - Seamless Anki integration
 
@@ -62,9 +66,11 @@ Create a note type called "vocbuilderAI" with these fields:
 2. Configure:
    - API keys (OpenAI/Groq/OpenRouter)
    - LLM provider selection (OpenAI, Groq, OpenRouter)
+   - Generation mode (Concise, Standard, Deep, Japanese)
    - Default deck and note type
    - Temperature and other model settings
    - Text-to-speech preferences
+   - Health checks for the selected provider and speech settings
 3. Click Save to apply changes immediately
 
 ### TODO
@@ -92,6 +98,10 @@ Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如
 - 全面的單詞記憶卡片
 - 支援多個 LLM 供應商
 - 文字轉語音發音
+- 設定頁可測試 API、日文 JSON 與文字轉語音
+- 可選擇簡潔、標準、深入或日文優先的生成模式
+- 更穩定的 JSON 解析與升級設定 migration
+- 對重複的相同生成請求提供短期快取
 - 可自訂牌組、卡片類型和標籤
 - 無縫整合 Anki
 
@@ -120,9 +130,11 @@ Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如
 2. 設定以下項目：
    - API 金鑰 (OpenAI/Groq/OpenRouter)
    - LLM 供應商選擇 (OpenAI, Groq, OpenRouter)
+   - 生成模式 (Concise, Standard, Deep, Japanese)
    - 預設牌組和筆記類型
    - Temperature 和其他模型設定
    - 文字轉語音偏好
+   - 目前 provider 和語音設定的健康檢查
 3. 點擊儲存立即套用變更
 
 ## Support | 支援
