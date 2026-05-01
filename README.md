@@ -38,11 +38,13 @@ Leave the model field blank to use VocBuilderAI's provider default. If Japanese 
 ![demo](media/vocAI-demo-1.gif)
 
 ### Installation
-1. Install the add-on from AnkiWeb, or clone/download this repository.
-2. Restart Anki after installing or updating the add-on.
-3. Open `Tools -> VocBuilderAI Settings`.
-4. Add at least one API key for OpenAI, Groq, or OpenRouter.
-5. Run the built-in health checks before generating cards.
+1. Download `vocbuilderai-*.ankiaddon` from the GitHub Releases page.
+2. In Anki, open `Tools -> Add-ons -> Install from file`.
+3. Select the downloaded `.ankiaddon` file.
+4. Restart Anki after installing or updating the add-on.
+5. Open `Tools -> VocBuilderAI Settings`.
+6. Add at least one API key for OpenAI, Groq, or OpenRouter.
+7. Run the built-in health checks before generating cards.
 
 For local development, symlink the add-on files into Anki's add-on directory:
 
@@ -147,11 +149,13 @@ Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如
 - 無縫整合 Anki
 
 ### 安裝方式
-1. 從 AnkiWeb 安裝，或從 GitHub clone/download 這個 repository。
-2. 安裝或更新 add-on 後重開 Anki。
-3. 打開 `Tools -> VocBuilderAI Settings`。
-4. 至少填入一組 OpenAI、Groq 或 OpenRouter API key。
-5. 先跑內建健康檢查，再開始產生卡片。
+1. 從 GitHub Releases 頁面下載 `vocbuilderai-*.ankiaddon`。
+2. 在 Anki 打開 `Tools -> Add-ons -> Install from file`。
+3. 選擇下載好的 `.ankiaddon` 檔案。
+4. 安裝或更新 add-on 後重開 Anki。
+5. 打開 `Tools -> VocBuilderAI Settings`。
+6. 至少填入一組 OpenAI、Groq 或 OpenRouter API key。
+7. 先跑內建健康檢查，再開始產生卡片。
 
 本機開發時，可以把專案檔案 symlink 到 Anki add-on 目錄：
 

@@ -1,6 +1,6 @@
 [project]
 name = "vocbuilderai"
-version = "0.9"
+version = "1.2"
 description = "generate detailed notes for new vocabulary using LLM and Whisper's API"
 readme = "README.md"
 requires-python = ">=3.11"
