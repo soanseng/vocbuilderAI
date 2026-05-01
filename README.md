@@ -7,10 +7,20 @@
 VocabBuilderAI is an Anki add-on that enhances vocabulary learning by integrating with multiple LLM providers. It generates comprehensive flashcards including definitions, pronunciations, etymology, synonyms, antonyms, and real-world examples.
 
 ### Supported LLM Providers
-- OpenAI (GPT-3.5/4)
-- Deepseek
+- OpenAI
+- DeepSeek
 - Groq
 - OpenRouter
+
+### Recommended Models
+Model names change quickly, so VocBuilderAI lets you type any chat-completions compatible model supported by your provider.
+
+For the best results in 2026, use a current general-purpose model with strong JSON output and multilingual support. Recommended starting points:
+- OpenAI: use the current small or flagship GPT model for balanced cost and quality.
+- OpenRouter: choose a recent high-quality model with Japanese and Traditional Chinese support.
+- DeepSeek or Groq: use their current chat/reasoning model if you prefer lower cost or faster generation.
+
+Leave the model field blank to use VocBuilderAI's provider default. If Japanese output is incomplete, switch to a stronger multilingual model before raising temperature.
 
 ![](media/dictionary.png)
 ![](media/webster.png)
@@ -65,10 +75,20 @@ Create a note type called "vocbuilderAI" with these fields:
 VocabBuilderAI 是一款 Anki 擴充功能，透過整合多個 LLM 供應商來增強單詞學習體驗。它能自動生成包含定義、發音、詞源、同義詞、反義詞及實際例子的完整記憶卡片。
 
 ### 支援的 LLM 供應商
-- OpenAI (GPT-3.5/4)
-- Deepseek
+- OpenAI
+- DeepSeek
 - Groq
 - OpenRouter
+
+### 推薦模型
+模型名稱更新很快，所以 VocBuilderAI 不會把模型寫死；你可以填入供應商支援的任何 chat-completions 相容模型。
+
+2026 年建議優先選擇 JSON 輸出穩定、日文與繁體中文能力好的通用模型：
+- OpenAI：使用當前的小型或旗艦 GPT 模型，在成本與品質之間通常最穩。
+- OpenRouter：選擇近期品質高、明確支援日文與繁體中文的模型。
+- DeepSeek 或 Groq：如果你重視成本或速度，可以使用它們當前的 chat/reasoning 模型。
+
+Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如果日文輸出不完整，先換成更強的多語模型，再考慮調高 temperature。
 
 ### 功能特點
 - 全面的單詞記憶卡片
