@@ -38,9 +38,27 @@ Leave the model field blank to use VocBuilderAI's provider default. If Japanese 
 ![demo](media/vocAI-demo-1.gif)
 
 ### Installation
-1. Download from AnkiWeb or GitHub
-2. Install via Anki's add-on manager
-3. Configure API keys and preferences
+1. Install the add-on from AnkiWeb, or clone/download this repository.
+2. Restart Anki after installing or updating the add-on.
+3. Open `Tools -> VocBuilderAI Settings`.
+4. Add at least one API key for OpenAI, Groq, or OpenRouter.
+5. Run the built-in health checks before generating cards.
+
+For local development, symlink the add-on files into Anki's add-on directory:
+
+```bash
+mkdir -p ~/.local/share/Anki2/addons21/voc_builder_ai
+ln -sf "$PWD/__init__.py" ~/.local/share/Anki2/addons21/voc_builder_ai/__init__.py
+ln -sf "$PWD/prompts.py" ~/.local/share/Anki2/addons21/voc_builder_ai/prompts.py
+ln -sf "$PWD/config.json" ~/.local/share/Anki2/addons21/voc_builder_ai/config.json
+ln -sf "$PWD/manifest.json" ~/.local/share/Anki2/addons21/voc_builder_ai/manifest.json
+ln -sf "$PWD/llm.py" ~/.local/share/Anki2/addons21/voc_builder_ai/llm.py
+ln -sf "$PWD/settings.py" ~/.local/share/Anki2/addons21/voc_builder_ai/settings.py
+ln -sf "$PWD/parsing.py" ~/.local/share/Anki2/addons21/voc_builder_ai/parsing.py
+ln -sf "$PWD/formatters.py" ~/.local/share/Anki2/addons21/voc_builder_ai/formatters.py
+```
+
+Keep `meta.json` inside the Anki add-on directory. It is user-specific and may contain API keys, so it should not be committed.
 
 ### Note Type Setup
 Create a note type called "vocbuilderAI" with these fields:
@@ -51,29 +69,52 @@ Create a note type called "vocbuilderAI" with these fields:
 - Etymology, Synonyms, and Antonyms
 - Real-world examples
 
+### Configuration
+Open `Tools -> VocBuilderAI Settings` and configure these tabs:
+
+- `Generation`: choose OpenAI, Groq, or OpenRouter; choose a generation mode; set model, temperature, max tokens, and cache behavior.
+- `API Keys`: enter the API key for the provider you want to use.
+- `Anki`: set the default deck, tag, and note type.
+- `Speech`: set the OpenAI speech model, voice, and speed.
+
+Generation modes:
+
+- `Concise`: shorter cards with fewer examples.
+- `Standard`: balanced default for daily use.
+- `Deep`: richer definitions and usage notes.
+- `Japanese`: Japanese-focused output with stable readings, grammar, and Traditional Chinese translations.
+
+Leave the model field blank to use the provider default.
+
+### Health Checks
+Before generating cards, use these buttons in `Tools -> VocBuilderAI Settings`:
+
+- `Test API`: verifies the selected provider, model, API key, and JSON response.
+- `Test Japanese JSON`: verifies that Japanese output can be generated and parsed safely.
+- `Test TTS`: verifies OpenAI text-to-speech settings.
+
+If a check fails, change the API key, provider, or model before creating cards.
+
 ### Usage
-1. Open Anki's card creation window
-2. Click "VocabBuilderAI"
-3. Enter your word
-4. Let AI generate the content
+1. Open Anki's `Add` window.
+2. Select the `vocbuilderAI` note type.
+3. Type the English or Japanese word in the first field.
+4. Click the `VocAI` button in the editor toolbar.
+5. Review the generated fields.
+6. Click `Add` to save the note.
+
+For Japanese vocabulary, use the `Japanese` generation mode if you want more consistent readings, grammar, and Traditional Chinese translations.
 
 ![screenshot1](media/sceenshot-1.png)
 ![screenshot2](media/sceenshot-2.png)
 ![screenshot3](media/sceenshot-3.png)
 
-### Configuration
-1. Go to Tools -> VocBuilderAI Settings
-2. Configure:
-   - API keys (OpenAI/Groq/OpenRouter)
-   - LLM provider selection (OpenAI, Groq, OpenRouter)
-   - Generation mode (Concise, Standard, Deep, Japanese)
-   - Default deck and note type
-   - Temperature and other model settings
-   - Text-to-speech preferences
-   - Health checks for the selected provider and speech settings
-3. Click Save to apply changes immediately
-
-### TODO
+### Troubleshooting
+- `Unsupported parameter: max_tokens`: update to the latest add-on version. OpenAI uses `max_completion_tokens`.
+- Japanese cards are incomplete: run `Test Japanese JSON`, switch to `Japanese` mode, or use a stronger multilingual model.
+- The button does not appear: restart Anki after installing or updating the add-on.
+- API errors: verify the selected provider, model name, and API key in settings.
+- No audio: verify the OpenAI API key and run `Test TTS`.
 
 ## Traditional Chinese
 
@@ -106,9 +147,27 @@ Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如
 - 無縫整合 Anki
 
 ### 安裝方式
-1. 從 AnkiWeb 或 GitHub 下載
-2. 透過 Anki 擴充功能管理器安裝
-3. 設定 API 金鑰和偏好設定
+1. 從 AnkiWeb 安裝，或從 GitHub clone/download 這個 repository。
+2. 安裝或更新 add-on 後重開 Anki。
+3. 打開 `Tools -> VocBuilderAI Settings`。
+4. 至少填入一組 OpenAI、Groq 或 OpenRouter API key。
+5. 先跑內建健康檢查，再開始產生卡片。
+
+本機開發時，可以把專案檔案 symlink 到 Anki add-on 目錄：
+
+```bash
+mkdir -p ~/.local/share/Anki2/addons21/voc_builder_ai
+ln -sf "$PWD/__init__.py" ~/.local/share/Anki2/addons21/voc_builder_ai/__init__.py
+ln -sf "$PWD/prompts.py" ~/.local/share/Anki2/addons21/voc_builder_ai/prompts.py
+ln -sf "$PWD/config.json" ~/.local/share/Anki2/addons21/voc_builder_ai/config.json
+ln -sf "$PWD/manifest.json" ~/.local/share/Anki2/addons21/voc_builder_ai/manifest.json
+ln -sf "$PWD/llm.py" ~/.local/share/Anki2/addons21/voc_builder_ai/llm.py
+ln -sf "$PWD/settings.py" ~/.local/share/Anki2/addons21/voc_builder_ai/settings.py
+ln -sf "$PWD/parsing.py" ~/.local/share/Anki2/addons21/voc_builder_ai/parsing.py
+ln -sf "$PWD/formatters.py" ~/.local/share/Anki2/addons21/voc_builder_ai/formatters.py
+```
+
+`meta.json` 請留在 Anki add-on 目錄裡。它是使用者本機設定，可能包含 API key，不要 commit 進 git。
 
 ### 筆記類型設定
 建立名為 "vocbuilderAI" 的筆記類型，包含以下欄位：
@@ -119,23 +178,48 @@ Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如
 - Etymology, Synonyms and Antonyms
 - Real-world examples
 
-### 使用方法
-1. 開啟 Anki 的卡片建立視窗
-2. 點擊 "VocabBuilderAI"
-3. 輸入單詞
-4. 讓 AI 生成內容
-
 ### 設定選項
-1. 前往 工具 -> VocBuilderAI Settings
-2. 設定以下項目：
-   - API 金鑰 (OpenAI/Groq/OpenRouter)
-   - LLM 供應商選擇 (OpenAI, Groq, OpenRouter)
-   - 生成模式 (Concise, Standard, Deep, Japanese)
-   - 預設牌組和筆記類型
-   - Temperature 和其他模型設定
-   - 文字轉語音偏好
-   - 目前 provider 和語音設定的健康檢查
-3. 點擊儲存立即套用變更
+打開 `Tools -> VocBuilderAI Settings` 後設定這幾個分頁：
+
+- `Generation`：選擇 OpenAI、Groq 或 OpenRouter；設定生成模式、model、temperature、max tokens 和快取。
+- `API Keys`：填入你要使用的 provider API key。
+- `Anki`：設定預設 deck、tag 和 note type。
+- `Speech`：設定 OpenAI 文字轉語音的 model、voice 和 speed。
+
+生成模式：
+
+- `Concise`：較短的卡片，例句較少。
+- `Standard`：日常使用的平衡預設值。
+- `Deep`：更完整的定義、用法和補充說明。
+- `Japanese`：日文優先，強化讀音、文法、例句與繁中翻譯穩定性。
+
+Model 欄位留空時，會使用 provider 的預設模型。
+
+### 健康檢查
+開始產生卡片前，建議在 `Tools -> VocBuilderAI Settings` 先測：
+
+- `Test API`：確認目前 provider、model、API key 和 JSON 回應可用。
+- `Test Japanese JSON`：確認日文輸出能產生且可以安全解析。
+- `Test TTS`：確認 OpenAI 文字轉語音設定可用。
+
+如果檢查失敗，先更換 API key、provider 或 model，再產生卡片。
+
+### 使用方法
+1. 打開 Anki 的 `Add` 視窗。
+2. 選擇 `vocbuilderAI` note type。
+3. 在第一個欄位輸入英文或日文單字。
+4. 點 editor toolbar 裡的 `VocAI` 按鈕。
+5. 檢查自動生成的欄位內容。
+6. 點 `Add` 儲存卡片。
+
+如果主要產生日文卡片，建議使用 `Japanese` 生成模式，讀音、文法和繁中翻譯會比較穩定。
+
+### 疑難排解
+- `Unsupported parameter: max_tokens`：請更新到最新版 add-on。OpenAI 現在使用 `max_completion_tokens`。
+- 日文卡片內容不完整：先跑 `Test Japanese JSON`，切到 `Japanese` 模式，或換成更強的多語模型。
+- 看不到按鈕：安裝或更新 add-on 後請重開 Anki。
+- API 錯誤：確認 settings 裡的 provider、model name 和 API key。
+- 沒有語音：確認 OpenAI API key，並執行 `Test TTS`。
 
 ## Support | 支援
 For support, questions, or feature requests, please visit our GitHub repository.
