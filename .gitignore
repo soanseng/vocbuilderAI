@@ -8,6 +8,7 @@ pyproject.toml
 .vscode
 .DS_Store
 *.ankiaddon
+meta.json
 .vscode/
 
 # Development environment
