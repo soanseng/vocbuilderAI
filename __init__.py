@@ -111,6 +111,7 @@ try:
         QPushButton,
         QScrollArea,
         QSizePolicy,
+        QSpinBox,
         QTabWidget,
         QVBoxLayout,
         QWidget,
@@ -135,7 +136,7 @@ except Exception:
 
     QAction = QCheckBox = QComboBox = QDialog = QDialogButtonBox = QDoubleSpinBox = _UnavailableQt
     QFormLayout = QFrame = QGroupBox = QHBoxLayout = QLabel = QLineEdit = _UnavailableQt
-    QPushButton = QScrollArea = QSizePolicy = QTabWidget = QVBoxLayout = QWidget = _UnavailableQt
+    QPushButton = QScrollArea = QSizePolicy = QSpinBox = QTabWidget = QVBoxLayout = QWidget = _UnavailableQt
 
 if not ANKI_AVAILABLE:  # pragma: no cover - keeps CLI smoke checks usable when aqt is installed.
 
@@ -158,6 +159,57 @@ def load_addon_config():
 config = load_addon_config()
 GENERATION_CACHE = {}
 CACHE_TTL_SECONDS = 300
+OPENAI_TTS_VOICES = [
+    "alloy",
+    "ash",
+    "ballad",
+    "coral",
+    "echo",
+    "fable",
+    "nova",
+    "onyx",
+    "sage",
+    "shimmer",
+]
+KOKORO_AMERICAN_VOICES = [
+    "af_heart",
+    "af_alloy",
+    "af_aoede",
+    "af_bella",
+    "af_jessica",
+    "af_kore",
+    "af_nicole",
+    "af_nova",
+    "af_river",
+    "af_sarah",
+    "af_sky",
+    "am_adam",
+    "am_echo",
+    "am_eric",
+    "am_fenrir",
+    "am_liam",
+    "am_michael",
+    "am_onyx",
+    "am_puck",
+    "am_santa",
+]
+KOKORO_RANDOM_AMERICAN_VOICES = [
+    "af_bella",
+    "af_nicole",
+    "af_sarah",
+    "af_sky",
+    "am_adam",
+    "am_michael",
+]
+KOKORO_JAPANESE_VOICES = [
+    "jf_alpha",
+    "jf_gongitsune",
+    "jf_nezumi",
+    "jf_tebukuro",
+    "jm_kumo",
+]
+KOKORO_TTS_MODEL = "speaches-ai/Kokoro-82M-v1.0-ONNX"
+KOKORO_LEGACY_ENGLISH_MODEL = "csukuangfj/kokoro-en-v0_19"
 
 
 def is_japanese_vocab(vocab_word):
@@ -287,44 +339,78 @@ def run_japanese_json_health_check():
     return type(result)(True, "Japanese JSON generation and parsing succeeded.")
 
 
+def audio_speech_url(base_url):
+    if "/audio/speech" in base_url:
+        return base_url
+    return f"{base_url.rstrip('/')}/audio/speech"
+
+
+def speech_file_extension(response_format):
+    response_format = (response_format or "mp3").strip().lower()
+    if response_format in {"wav", "mp3", "opus", "aac", "flac", "pcm"}:
+        return response_format
+    return "mp3"
+
+
+def speech_settings(input_text=""):
+    provider = config.get("speech_provider", "openai")
+    if provider not in {"openai", "custom"}:
+        provider = "openai"
+    is_japanese_text = is_japanese_vocab(input_text)
+
+    if provider == "custom":
+        api_key = normalize_api_key(config.get("speech_api_key"))
+        base_url = config.get("speech_base_url") or "http://your-tts-server:8001/v1"
+        configured_model = config.get("speech_model")
+        model = (
+            KOKORO_TTS_MODEL
+            if configured_model in {"", "gpt-4o-mini-tts", KOKORO_LEGACY_ENGLISH_MODEL, None}
+            else configured_model
+        )
+        response_format = config.get("speech_response_format") or "wav"
+        voices = KOKORO_JAPANESE_VOICES if is_japanese_text else KOKORO_RANDOM_AMERICAN_VOICES
+    else:
+        api_key = normalize_api_key(config.get("speech_api_key")) or normalize_api_key(config.get("openai_api_key"))
+        base_url = "https://api.openai.com/v1"
+        model = config.get("speech_model") or "gpt-4o-mini-tts"
+        response_format = config.get("speech_response_format") or "mp3"
+        voices = OPENAI_TTS_VOICES
+
+    configured_voice = config.get("speech_voice")
+    voice = configured_voice if configured_voice in voices else random.choice(voices)
+    return provider, api_key, audio_speech_url(base_url), model, voice, response_format
+
+
 def generate_speech(vocab_word, retries=3):
-    api_key = normalize_api_key(config.get("openai_api_key"))
+    provider, api_key, url, speech_model, speech_voice, response_format = speech_settings(vocab_word)
     if not api_key:
         return None
 
-    base_url = "https://api.openai.com/v1"
     temp_file_path = None
     payload = {}
     for attempt in range(retries):
         try:
             hashed_vocab = hashlib.md5(str(vocab_word).encode()).hexdigest()
-            temp_file_path = Path(__file__).parent / f"vocbuilderai-{hashed_vocab}.mp3"
-            random_voice = [
-                "alloy",
-                "ash",
-                "ballad",
-                "coral",
-                "echo",
-                "fable",
-                "nova",
-                "onyx",
-                "sage",
-                "shimmer",
-            ]
-            speech_voice = config.get("speech_voice") or random.choice(random_voice)
-            speech_model = config.get("speech_model") or "gpt-4o-mini-tts"
+            extension = speech_file_extension(response_format)
+            temp_file_path = Path(__file__).parent / f"vocbuilderai-{hashed_vocab}.{extension}"
             input_text = str(vocab_word)
 
             payload = {
                 "model": speech_model,
                 "voice": speech_voice,
                 "input": input_text,
-                "instructions": "Speak clearly and naturally. Use Japanese pronunciation for Japanese text.",
-                "speed": float(config.get("speech_speed", 1.0)),
             }
+            if provider == "custom":
+                payload["response_format"] = response_format
+                payload["sample_rate"] = int(config.get("speech_sample_rate", 24000))
+            else:
+                payload["instructions"] = "Speak clearly and naturally. Use Japanese pronunciation for Japanese text."
+                payload["speed"] = float(config.get("speech_speed", 1.0))
+                if response_format != "mp3":
+                    payload["response_format"] = response_format
 
             response = requests.post(
-                f"{base_url}/audio/speech",
+                url,
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json=payload,
                 timeout=60,
@@ -581,11 +667,19 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             anki_layout.addStretch()
             self.tabs.addTab(anki_tab, "Anki")
 
+            self.speech_provider = QComboBox()
+            self.speech_provider.addItems(["openai", "custom"])
+            self.speech_provider.currentTextChanged.connect(self.update_speech_hints)
+            self.speech_key = self.api_key_input()
+            self.speech_base_url = QLineEdit()
             self.speech_voice = QComboBox()
-            self.speech_voice.addItems(
-                ["", "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"]
-            )
+            self.speech_voice.addItems([""] + OPENAI_TTS_VOICES + KOKORO_AMERICAN_VOICES)
             self.speech_model = QLineEdit()
+            self.speech_response_format = QComboBox()
+            self.speech_response_format.addItems(["", "mp3", "wav", "opus", "aac", "flac", "pcm"])
+            self.speech_sample_rate = QSpinBox()
+            self.speech_sample_rate.setRange(8000, 48000)
+            self.speech_sample_rate.setSingleStep(1000)
             self.speech_speed = QDoubleSpinBox()
             self.speech_speed.setRange(0.25, 4.0)
             self.speech_speed.setSingleStep(0.25)
@@ -595,8 +689,13 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             speech_layout = QVBoxLayout(speech_tab)
             speech_group = QGroupBox("Speech")
             speech_form = QFormLayout(speech_group)
+            speech_form.addRow("Provider", self.speech_provider)
+            speech_form.addRow("Speech API key", self.speech_key)
+            speech_form.addRow("Custom base URL", self.speech_base_url)
             speech_form.addRow("Voice", self.speech_voice)
             speech_form.addRow("Model", self.speech_model)
+            speech_form.addRow("Format", self.speech_response_format)
+            speech_form.addRow("Sample rate", self.speech_sample_rate)
             speech_form.addRow("Speed", self.speech_speed)
             test_speech_button = QPushButton("Test TTS")
             test_speech_button.clicked.connect(self.test_speech)
@@ -604,6 +703,7 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             speech_layout.addWidget(speech_group)
             speech_layout.addStretch()
             self.tabs.addTab(speech_tab, "Speech")
+            self.update_speech_hints()
 
             layout.addWidget(self.tabs)
 
@@ -628,6 +728,17 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
                 self.custom_response_format.setEnabled(is_custom)
                 self.custom_disable_thinking.setEnabled(is_custom)
             self.provider_hint.setText(f"{defaults['model']} at {defaults['base_url']}")
+
+        def update_speech_hints(self):
+            if not hasattr(self, "speech_base_url"):
+                return
+            is_custom = self.speech_provider.currentText() == "custom"
+            self.speech_base_url.setEnabled(is_custom)
+            self.speech_sample_rate.setEnabled(is_custom)
+            self.speech_speed.setEnabled(not is_custom)
+            self.speech_model.setPlaceholderText(
+                KOKORO_TTS_MODEL if is_custom else "gpt-4o-mini-tts"
+            )
 
         def apply_default_model(self):
             self.model.setText(get_provider_defaults(self.provider.currentText())["model"])
@@ -654,8 +765,13 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
                     "model": self.model.text().strip(),
                     "temperature": self.temperature.value(),
                     "max_tokens": int(self.max_tokens.value()),
+                    "speech_provider": self.speech_provider.currentText(),
+                    "speech_api_key": self.speech_key.text().strip(),
+                    "speech_base_url": self.speech_base_url.text().strip(),
                     "speech_voice": self.speech_voice.currentText(),
-                    "speech_model": self.speech_model.text().strip() or "gpt-4o-mini-tts",
+                    "speech_model": self.speech_model.text().strip(),
+                    "speech_response_format": self.speech_response_format.currentText(),
+                    "speech_sample_rate": self.speech_sample_rate.value(),
                     "speech_speed": self.speech_speed.value(),
                     "default_deck": self.default_deck.text().strip() or "Big",
                     "default_tag": self.default_tag.text().strip() or "vocabulary::wordoftheday",
@@ -693,7 +809,7 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             if sound_file:
                 showInfo("Text-to-speech generation succeeded.")
             else:
-                showInfo("Text-to-speech generation failed. Check your OpenAI API key and speech settings.")
+                showInfo("Text-to-speech generation failed. Check your speech provider, API key, and settings.")
 
         def load_config(self):
             self.provider.setCurrentText(config.get("provider", "openai"))
@@ -709,9 +825,15 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             self.model.setText(config.get("model", ""))
             self.temperature.setValue(float(config.get("temperature", 0.5)))
             self.max_tokens.setValue(float(config.get("max_tokens", 15000)))
+            self.speech_provider.setCurrentText(config.get("speech_provider", "openai"))
+            self.speech_key.setText(config.get("speech_api_key", ""))
+            self.speech_base_url.setText(config.get("speech_base_url", ""))
             self.speech_voice.setCurrentText(config.get("speech_voice", ""))
             self.speech_model.setText(config.get("speech_model", "gpt-4o-mini-tts"))
+            self.speech_response_format.setCurrentText(config.get("speech_response_format", ""))
+            self.speech_sample_rate.setValue(int(config.get("speech_sample_rate", 24000)))
             self.speech_speed.setValue(float(config.get("speech_speed", 1.0)))
+            self.update_speech_hints()
             self.default_deck.setText(config.get("default_deck", "Big"))
             self.default_tag.setText(config.get("default_tag", "vocabulary::wordoftheday"))
             self.note_type.setText(config.get("note_type", "vocbuilderAI"))

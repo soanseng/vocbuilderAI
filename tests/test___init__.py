@@ -507,6 +507,8 @@ def test_generate_vocab_note_handles_no_response_and_bad_shape(monkeypatch):
 
 
 def test_generate_speech_skips_when_openai_key_missing(monkeypatch):
+    monkeypatch.setitem(addon.config, "speech_provider", "openai")
+    monkeypatch.setitem(addon.config, "speech_api_key", "your-speech-key")
     monkeypatch.setitem(addon.config, "openai_api_key", "your-openai-key")
 
     assert addon.generate_speech("近い") is None
@@ -514,9 +516,12 @@ def test_generate_speech_skips_when_openai_key_missing(monkeypatch):
 
 def test_generate_speech_writes_media_file(monkeypatch, tmp_path):
     added_files = []
+    monkeypatch.setitem(addon.config, "speech_provider", "openai")
+    monkeypatch.setitem(addon.config, "speech_api_key", "your-speech-key")
     monkeypatch.setitem(addon.config, "openai_api_key", "test-key")
     monkeypatch.setitem(addon.config, "speech_voice", "nova")
     monkeypatch.setitem(addon.config, "speech_model", "gpt-4o-mini-tts")
+    monkeypatch.setitem(addon.config, "speech_response_format", "mp3")
     monkeypatch.setattr(addon, "__file__", str(tmp_path / "__init__.py"))
     monkeypatch.setattr(addon, "mw", SimpleNamespace(col=SimpleNamespace(media=SimpleNamespace(addFile=added_files.append))))
 
@@ -544,6 +549,8 @@ def test_generate_speech_writes_media_file(monkeypatch, tmp_path):
 
 def test_generate_speech_reports_failure(monkeypatch, tmp_path):
     messages = []
+    monkeypatch.setitem(addon.config, "speech_provider", "openai")
+    monkeypatch.setitem(addon.config, "speech_api_key", "your-speech-key")
     monkeypatch.setitem(addon.config, "openai_api_key", "test-key")
     monkeypatch.setattr(addon, "__file__", str(tmp_path / "__init__.py"))
     monkeypatch.setattr(addon, "showInfo", messages.append)
@@ -560,6 +567,8 @@ def test_generate_speech_reports_failure(monkeypatch, tmp_path):
 def test_generate_speech_retries_before_success(monkeypatch, tmp_path):
     added_files = []
     calls = []
+    monkeypatch.setitem(addon.config, "speech_provider", "openai")
+    monkeypatch.setitem(addon.config, "speech_api_key", "your-speech-key")
     monkeypatch.setitem(addon.config, "openai_api_key", "test-key")
     monkeypatch.setattr(addon, "__file__", str(tmp_path / "__init__.py"))
     monkeypatch.setattr(addon, "mw", SimpleNamespace(col=SimpleNamespace(media=SimpleNamespace(addFile=lambda path: added_files.append(path.name) or "audio.mp3"))))
@@ -582,6 +591,77 @@ def test_generate_speech_retries_before_success(monkeypatch, tmp_path):
     assert addon.generate_speech("apple", retries=2) == "audio.mp3"
     assert len(calls) == 2
     assert added_files[0].endswith(".mp3")
+
+
+def test_generate_speech_uses_custom_kokoro_tts(monkeypatch, tmp_path):
+    added_files = []
+    monkeypatch.setitem(addon.config, "speech_provider", "custom")
+    monkeypatch.setitem(addon.config, "speech_api_key", "speaches-key")
+    monkeypatch.setitem(addon.config, "speech_base_url", "http://your-tts-server:8001/v1")
+    monkeypatch.setitem(addon.config, "speech_voice", "af_bella")
+    monkeypatch.setitem(addon.config, "speech_model", "csukuangfj/kokoro-en-v0_19")
+    monkeypatch.setitem(addon.config, "speech_response_format", "wav")
+    monkeypatch.setitem(addon.config, "speech_sample_rate", 24000)
+    monkeypatch.setattr(addon, "__file__", str(tmp_path / "__init__.py"))
+    monkeypatch.setattr(addon, "mw", SimpleNamespace(col=SimpleNamespace(media=SimpleNamespace(addFile=lambda path: added_files.append(path.name) or "kokoro.wav"))))
+
+    class Response:
+        content = b"wav"
+
+        def raise_for_status(self):
+            return None
+
+    captured = {}
+
+    def fake_post(url, headers, json, timeout):
+        captured.update({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr(addon.requests, "post", fake_post)
+
+    assert addon.generate_speech("apple", retries=1) == "kokoro.wav"
+    assert added_files[0].endswith(".wav")
+    assert captured["url"] == "http://your-tts-server:8001/v1/audio/speech"
+    assert captured["headers"]["Authorization"] == "Bearer speaches-key"
+    assert captured["json"] == {
+        "model": "speaches-ai/Kokoro-82M-v1.0-ONNX",
+        "voice": "af_bella",
+        "input": "apple",
+        "response_format": "wav",
+        "sample_rate": 24000,
+    }
+
+
+def test_custom_speech_random_voice_uses_american_kokoro_list(monkeypatch):
+    monkeypatch.setitem(addon.config, "speech_provider", "custom")
+    monkeypatch.setitem(addon.config, "speech_api_key", "speaches-key")
+    monkeypatch.setitem(addon.config, "speech_voice", "")
+    monkeypatch.setattr(addon.random, "choice", lambda choices: choices[-1])
+
+    provider, api_key, url, model, voice, response_format = addon.speech_settings()
+
+    assert provider == "custom"
+    assert api_key == "speaches-key"
+    assert voice == "am_michael"
+    assert voice in addon.KOKORO_RANDOM_AMERICAN_VOICES
+    assert model == "speaches-ai/Kokoro-82M-v1.0-ONNX"
+    assert response_format == "wav"
+
+
+def test_custom_speech_japanese_uses_multilingual_model_and_japanese_voice(monkeypatch):
+    monkeypatch.setitem(addon.config, "speech_provider", "custom")
+    monkeypatch.setitem(addon.config, "speech_api_key", "speaches-key")
+    monkeypatch.setitem(addon.config, "speech_model", "csukuangfj/kokoro-en-v0_19")
+    monkeypatch.setitem(addon.config, "speech_voice", "")
+    monkeypatch.setattr(addon.random, "choice", lambda choices: choices[0])
+
+    provider, api_key, url, model, voice, response_format = addon.speech_settings("近い")
+
+    assert provider == "custom"
+    assert model == "speaches-ai/Kokoro-82M-v1.0-ONNX"
+    assert voice == "jf_alpha"
+    assert voice in addon.KOKORO_JAPANESE_VOICES
+    assert response_format == "wav"
 
 
 def test_on_add_note_populates_english_and_loads(monkeypatch):
@@ -692,6 +772,8 @@ def test_config_migration_recovers_from_removed_provider_and_fields():
             "model": None,
             "max_tokens": "not-int",
             "temperature": "bad",
+            "speech_provider": "bad-provider",
+            "speech_sample_rate": "bad",
             "speech_speed": "bad",
             "generation_mode": "unknown",
         }
@@ -702,6 +784,8 @@ def test_config_migration_recovers_from_removed_provider_and_fields():
     assert migrated["model"] == ""
     assert migrated["max_tokens"] == addon.CONFIG_DEFAULTS["max_tokens"]
     assert migrated["temperature"] == addon.CONFIG_DEFAULTS["temperature"]
+    assert migrated["speech_provider"] == "openai"
+    assert migrated["speech_sample_rate"] == addon.CONFIG_DEFAULTS["speech_sample_rate"]
     assert migrated["speech_speed"] == addon.CONFIG_DEFAULTS["speech_speed"]
     assert migrated["generation_mode"] == "standard"
 

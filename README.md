@@ -28,7 +28,7 @@ Leave the model field blank to use VocBuilderAI's provider default. If Japanese 
 ### Features
 - Comprehensive vocabulary flashcards
 - Multiple LLM provider support, including custom OpenAI-compatible endpoints
-- Text-to-speech for pronunciation
+- Text-to-speech for pronunciation through OpenAI or custom OpenAI-compatible TTS
 - Settings health checks for API, Japanese JSON, and text-to-speech
 - Generation modes for concise, standard, deep, or Japanese-focused cards
 - Safer JSON parsing and config migration for add-on upgrades
@@ -78,7 +78,7 @@ Open `Tools -> VocBuilderAI Settings` and configure these tabs:
 - `Generation`: choose OpenAI, Groq, OpenRouter, or Custom; choose a generation mode; set model, temperature, max tokens, and cache behavior.
 - `API Keys`: enter the API key for the provider you want to use.
 - `Anki`: set the default deck, tag, and note type.
-- `Speech`: set the OpenAI speech model, voice, and speed.
+- `Speech`: set OpenAI speech or custom OpenAI-compatible TTS, including model, voice, format, and speed.
 
 Generation modes:
 
@@ -97,12 +97,19 @@ For the GB10 LiteLLM service, choose `custom`, set the custom base URL to `http:
 
 Keep `Disable Qwen thinking` enabled for these models. It sends the vLLM/LiteLLM `enable_thinking=false` option so the add-on receives final JSON in `message.content`.
 
+For the GB10 Kokoro TTS service, set `Speech -> Provider` to `custom`, set the custom base URL to `http://your-tts-server:8001/v1`, and use:
+
+- Model: `speaches-ai/Kokoro-82M-v1.0-ONNX`
+- Format: `wav`
+- Sample rate: `24000`
+- Voice: leave blank to choose a live-verified voice automatically. English words use American `af_*` / `am_*` voices; Japanese words use `jf_*` / `jm_*` voices.
+
 ### Health Checks
 Before generating cards, use these buttons in `Tools -> VocBuilderAI Settings`:
 
 - `Test API`: verifies the selected provider, model, API key, and JSON response.
 - `Test Japanese JSON`: verifies that Japanese output can be generated and parsed safely.
-- `Test TTS`: verifies OpenAI text-to-speech settings.
+- `Test TTS`: verifies the configured text-to-speech settings.
 
 If a check fails, change the API key, provider, or model before creating cards.
 
@@ -125,7 +132,7 @@ For Japanese vocabulary, use the `Japanese` generation mode if you want more con
 - Japanese cards are incomplete: run `Test Japanese JSON`, switch to `Japanese` mode, or use a stronger multilingual model.
 - The button does not appear: restart Anki after installing or updating the add-on.
 - API errors: verify the selected provider, model name, and API key in settings.
-- No audio: verify the OpenAI API key and run `Test TTS`.
+- No audio: verify the selected speech provider, API key, base URL, model, and run `Test TTS`.
 
 ## Traditional Chinese
 
@@ -150,7 +157,7 @@ Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如
 ### 功能特點
 - 全面的單詞記憶卡片
 - 支援多個 LLM 供應商，包含自訂 OpenAI-compatible endpoint
-- 文字轉語音發音
+- 透過 OpenAI 或自訂 OpenAI-compatible TTS 產生文字轉語音發音
 - 設定頁可測試 API、日文 JSON 與文字轉語音
 - 可選擇簡潔、標準、深入或日文優先的生成模式
 - 更穩定的 JSON 解析與升級設定 migration
@@ -198,7 +205,7 @@ ln -sf "$PWD/formatters.py" ~/.local/share/Anki2/addons21/voc_builder_ai/formatt
 - `Generation`：選擇 OpenAI、Groq、OpenRouter 或 Custom；設定生成模式、model、temperature、max tokens 和快取。
 - `API Keys`：填入你要使用的 provider API key。
 - `Anki`：設定預設 deck、tag 和 note type。
-- `Speech`：設定 OpenAI 文字轉語音的 model、voice 和 speed。
+- `Speech`：設定 OpenAI 或自訂 OpenAI-compatible TTS，包含 model、voice、format 和 speed。
 
 生成模式：
 
@@ -217,12 +224,19 @@ GB10 LiteLLM 可選 `custom`，custom base URL 設成 `http://your-litellm-serve
 
 這幾個模型建議保持 `Disable Qwen thinking` 開啟。它會送出 vLLM/LiteLLM 的 `enable_thinking=false` 選項，讓 add-on 可以在 `message.content` 收到最終 JSON。
 
+GB10 Kokoro TTS 可在 `Speech -> Provider` 選 `custom`，custom base URL 設成 `http://your-tts-server:8001/v1`，並使用：
+
+- Model：`speaches-ai/Kokoro-82M-v1.0-ONNX`
+- Format：`wav`
+- Sample rate：`24000`
+- Voice：留空會自動選 live-verified voice。英文使用 American `af_*` / `am_*` voice；日文使用 `jf_*` / `jm_*` voice。
+
 ### 健康檢查
 開始產生卡片前，建議在 `Tools -> VocBuilderAI Settings` 先測：
 
 - `Test API`：確認目前 provider、model、API key 和 JSON 回應可用。
 - `Test Japanese JSON`：確認日文輸出能產生且可以安全解析。
-- `Test TTS`：確認 OpenAI 文字轉語音設定可用。
+- `Test TTS`：確認目前文字轉語音設定可用。
 
 如果檢查失敗，先更換 API key、provider 或 model，再產生卡片。
 
@@ -241,7 +255,7 @@ GB10 LiteLLM 可選 `custom`，custom base URL 設成 `http://your-litellm-serve
 - 日文卡片內容不完整：先跑 `Test Japanese JSON`，切到 `Japanese` 模式，或換成更強的多語模型。
 - 看不到按鈕：安裝或更新 add-on 後請重開 Anki。
 - API 錯誤：確認 settings 裡的 provider、model name 和 API key。
-- 沒有語音：確認 OpenAI API key，並執行 `Test TTS`。
+- 沒有語音：確認 speech provider、API key、base URL、model，並執行 `Test TTS`。
 
 ## Support | 支援
 For support, questions, or feature requests, please visit our GitHub repository.

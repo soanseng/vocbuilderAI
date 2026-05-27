@@ -42,6 +42,7 @@ def redact_payload(value):
                 "groq_api_key",
                 "openrouter_api_key",
                 "custom_api_key",
+                "speech_api_key",
             }:
                 redacted[key] = "[redacted]"
             else:

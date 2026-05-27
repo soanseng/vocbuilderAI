@@ -12,8 +12,13 @@ CONFIG_DEFAULTS = {
     "model": "",
     "max_tokens": 15000,
     "temperature": 0.5,
+    "speech_provider": "openai",
+    "speech_api_key": "your-speech-key",
+    "speech_base_url": "http://your-tts-server:8001/v1",
     "speech_voice": "",
     "speech_model": "gpt-4o-mini-tts",
+    "speech_response_format": "",
+    "speech_sample_rate": 24000,
     "speech_speed": 1.0,
     "provider": "openai",
     "generation_mode": "standard",
@@ -76,6 +81,7 @@ PLACEHOLDER_KEYS = {
     "your-groq-key",
     "your-openrouter-key",
     "your-custom-key",
+    "your-speech-key",
 }
 
 def get_provider_defaults(provider):
@@ -121,6 +127,12 @@ def migrate_config(raw_config=None):
     migrated["custom_base_url"] = (migrated.get("custom_base_url") or CONFIG_DEFAULTS["custom_base_url"]).strip()
     migrated["custom_supports_response_format"] = bool(migrated.get("custom_supports_response_format", False))
     migrated["custom_disable_thinking"] = bool(migrated.get("custom_disable_thinking", True))
+    if migrated.get("speech_provider") not in {"openai", "custom"}:
+        migrated["speech_provider"] = CONFIG_DEFAULTS["speech_provider"]
+    migrated["speech_base_url"] = (migrated.get("speech_base_url") or CONFIG_DEFAULTS["speech_base_url"]).strip()
+    migrated["speech_response_format"] = (
+        migrated.get("speech_response_format") or CONFIG_DEFAULTS["speech_response_format"]
+    ).strip()
     migrated["generation_mode"] = normalize_generation_mode(migrated.get("generation_mode"))
 
     try:
@@ -137,6 +149,11 @@ def migrate_config(raw_config=None):
         migrated["speech_speed"] = float(migrated.get("speech_speed", CONFIG_DEFAULTS["speech_speed"]))
     except (TypeError, ValueError):
         migrated["speech_speed"] = CONFIG_DEFAULTS["speech_speed"]
+
+    try:
+        migrated["speech_sample_rate"] = int(migrated.get("speech_sample_rate", CONFIG_DEFAULTS["speech_sample_rate"]))
+    except (TypeError, ValueError):
+        migrated["speech_sample_rate"] = CONFIG_DEFAULTS["speech_sample_rate"]
 
     return migrated
 
