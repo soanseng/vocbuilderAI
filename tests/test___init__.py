@@ -146,6 +146,48 @@ def test_openai_generation_includes_json_response_format(monkeypatch):
     assert captured["payload"]["response_format"] == {"type": "json_object"}
 
 
+def test_custom_generation_uses_configured_litellm_endpoint(monkeypatch):
+    captured = {}
+
+    class Response:
+        def json(self):
+            return {"choices": [{"message": {"content": json.dumps({"word": "apple"})}}]}
+
+    def fake_request(payload, api_key, base_url, retries=3, provider="openai"):
+        captured.update({"payload": payload, "api_key": api_key, "base_url": base_url, "provider": provider})
+        return Response()
+
+    monkeypatch.setattr(addon, "llm_api_request", fake_request)
+    monkeypatch.setitem(addon.config, "provider", "custom")
+    monkeypatch.setitem(addon.config, "model", "")
+    monkeypatch.setitem(addon.config, "custom_api_key", "litellm-key")
+    monkeypatch.setitem(addon.config, "custom_base_url", "http://your-litellm-server:4000/v1")
+    monkeypatch.setitem(addon.config, "custom_supports_response_format", False)
+    monkeypatch.setitem(addon.config, "custom_disable_thinking", True)
+
+    result = addon.generate_vocab_note("apple")
+
+    assert json.loads(result) == {"word": "apple"}
+    assert captured["provider"] == "custom"
+    assert captured["api_key"] == "litellm-key"
+    assert captured["base_url"] == "http://your-litellm-server:4000/v1"
+    assert captured["payload"]["model"] == "qwen36-fast"
+    assert captured["payload"]["max_tokens"] == 15000
+    assert captured["payload"]["extra_body"] == {"chat_template_kwargs": {"enable_thinking": False}}
+    assert "response_format" not in captured["payload"]
+
+
+def test_custom_generation_can_request_json_response_format(monkeypatch):
+    monkeypatch.setitem(addon.config, "custom_supports_response_format", True)
+    monkeypatch.setitem(addon.config, "custom_disable_thinking", False)
+    defaults = addon.resolve_provider_defaults({**addon.config, "provider": "custom"})
+
+    payload = addon.build_chat_payload("apple", addon.prompt_for_vocab("apple"), {**addon.config, "model": ""}, defaults)
+
+    assert payload["response_format"] == {"type": "json_object"}
+    assert "extra_body" not in payload
+
+
 def test_generate_vocab_note_reuses_recent_cache(monkeypatch):
     calls = []
 

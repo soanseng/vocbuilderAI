@@ -10,6 +10,7 @@ VocabBuilderAI is an Anki add-on that enhances vocabulary learning by integratin
 - OpenAI
 - Groq
 - OpenRouter
+- Custom OpenAI-compatible providers, including LiteLLM
 
 ### Recommended Models
 Model names change quickly, so VocBuilderAI lets you type any chat-completions compatible model supported by your provider.
@@ -26,7 +27,7 @@ Leave the model field blank to use VocBuilderAI's provider default. If Japanese 
 
 ### Features
 - Comprehensive vocabulary flashcards
-- Multiple LLM provider support
+- Multiple LLM provider support, including custom OpenAI-compatible endpoints
 - Text-to-speech for pronunciation
 - Settings health checks for API, Japanese JSON, and text-to-speech
 - Generation modes for concise, standard, deep, or Japanese-focused cards
@@ -43,7 +44,7 @@ Leave the model field blank to use VocBuilderAI's provider default. If Japanese 
 3. Select the downloaded `.ankiaddon` file.
 4. Restart Anki after installing or updating the add-on.
 5. Open `Tools -> VocBuilderAI Settings`.
-6. Add at least one API key for OpenAI, Groq, or OpenRouter.
+6. Add at least one API key for OpenAI, Groq, OpenRouter, or a custom provider.
 7. Run the built-in health checks before generating cards.
 
 For local development, symlink the add-on files into Anki's add-on directory:
@@ -74,7 +75,7 @@ Create a note type called "vocbuilderAI" with these fields:
 ### Configuration
 Open `Tools -> VocBuilderAI Settings` and configure these tabs:
 
-- `Generation`: choose OpenAI, Groq, or OpenRouter; choose a generation mode; set model, temperature, max tokens, and cache behavior.
+- `Generation`: choose OpenAI, Groq, OpenRouter, or Custom; choose a generation mode; set model, temperature, max tokens, and cache behavior.
 - `API Keys`: enter the API key for the provider you want to use.
 - `Anki`: set the default deck, tag, and note type.
 - `Speech`: set the OpenAI speech model, voice, and speed.
@@ -87,6 +88,14 @@ Generation modes:
 - `Japanese`: Japanese-focused output with stable readings, grammar, and Traditional Chinese translations.
 
 Leave the model field blank to use the provider default.
+
+For the GB10 LiteLLM service, choose `custom`, set the custom base URL to `http://your-litellm-server:4000/v1`, and use one of these models:
+
+- `qwen36-fast`
+- `qwen36-deep`
+- `qwen36-35b-heretic`
+
+Keep `Disable Qwen thinking` enabled for these models. It sends the vLLM/LiteLLM `enable_thinking=false` option so the add-on receives final JSON in `message.content`.
 
 ### Health Checks
 Before generating cards, use these buttons in `Tools -> VocBuilderAI Settings`:
@@ -126,6 +135,7 @@ VocabBuilderAI 是一款 Anki 擴充功能，透過整合多個 LLM 供應商來
 - OpenAI
 - Groq
 - OpenRouter
+- 自訂 OpenAI-compatible 供應商，例如 LiteLLM
 
 ### 推薦模型
 模型名稱更新很快，所以 VocBuilderAI 不會把模型寫死；你可以填入供應商支援的任何 chat-completions 相容模型。
@@ -139,7 +149,7 @@ Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如
 
 ### 功能特點
 - 全面的單詞記憶卡片
-- 支援多個 LLM 供應商
+- 支援多個 LLM 供應商，包含自訂 OpenAI-compatible endpoint
 - 文字轉語音發音
 - 設定頁可測試 API、日文 JSON 與文字轉語音
 - 可選擇簡潔、標準、深入或日文優先的生成模式
@@ -154,7 +164,7 @@ Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如
 3. 選擇下載好的 `.ankiaddon` 檔案。
 4. 安裝或更新 add-on 後重開 Anki。
 5. 打開 `Tools -> VocBuilderAI Settings`。
-6. 至少填入一組 OpenAI、Groq 或 OpenRouter API key。
+6. 至少填入一組 OpenAI、Groq、OpenRouter 或自訂 provider API key。
 7. 先跑內建健康檢查，再開始產生卡片。
 
 本機開發時，可以把專案檔案 symlink 到 Anki add-on 目錄：
@@ -185,7 +195,7 @@ ln -sf "$PWD/formatters.py" ~/.local/share/Anki2/addons21/voc_builder_ai/formatt
 ### 設定選項
 打開 `Tools -> VocBuilderAI Settings` 後設定這幾個分頁：
 
-- `Generation`：選擇 OpenAI、Groq 或 OpenRouter；設定生成模式、model、temperature、max tokens 和快取。
+- `Generation`：選擇 OpenAI、Groq、OpenRouter 或 Custom；設定生成模式、model、temperature、max tokens 和快取。
 - `API Keys`：填入你要使用的 provider API key。
 - `Anki`：設定預設 deck、tag 和 note type。
 - `Speech`：設定 OpenAI 文字轉語音的 model、voice 和 speed。
@@ -198,6 +208,14 @@ ln -sf "$PWD/formatters.py" ~/.local/share/Anki2/addons21/voc_builder_ai/formatt
 - `Japanese`：日文優先，強化讀音、文法、例句與繁中翻譯穩定性。
 
 Model 欄位留空時，會使用 provider 的預設模型。
+
+GB10 LiteLLM 可選 `custom`，custom base URL 設成 `http://your-litellm-server:4000/v1`，model 可用：
+
+- `qwen36-fast`
+- `qwen36-deep`
+- `qwen36-35b-heretic`
+
+這幾個模型建議保持 `Disable Qwen thinking` 開啟。它會送出 vLLM/LiteLLM 的 `enable_thinking=false` 選項，讓 add-on 可以在 `message.content` 收到最終 JSON。
 
 ### 健康檢查
 開始產生卡片前，建議在 `Tools -> VocBuilderAI Settings` 先測：

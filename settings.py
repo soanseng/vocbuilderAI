@@ -2,6 +2,10 @@ CONFIG_DEFAULTS = {
     "openai_api_key": "your-openai-key",
     "groq_api_key": "your-groq-key",
     "openrouter_api_key": "your-openrouter-key",
+    "custom_api_key": "your-custom-key",
+    "custom_base_url": "http://your-litellm-server:4000/v1",
+    "custom_supports_response_format": False,
+    "custom_disable_thinking": True,
     "default_deck": "Big",
     "default_tag": "vocabulary::wordoftheday",
     "note_type": "vocbuilderAI",
@@ -38,6 +42,14 @@ PROVIDER_DEFAULTS = {
         "supports_response_format": False,
         "token_param": "max_tokens",
     },
+    "custom": {
+        "model": "qwen36-fast",
+        "base_url": CONFIG_DEFAULTS["custom_base_url"],
+        "api_key_config": "custom_api_key",
+        "supports_response_format": CONFIG_DEFAULTS["custom_supports_response_format"],
+        "supports_disable_thinking": True,
+        "token_param": "max_tokens",
+    },
 }
 
 GENERATION_MODES = {
@@ -63,10 +75,24 @@ PLACEHOLDER_KEYS = {
     "your-openai-key",
     "your-groq-key",
     "your-openrouter-key",
+    "your-custom-key",
 }
 
 def get_provider_defaults(provider):
     return PROVIDER_DEFAULTS.get(provider, PROVIDER_DEFAULTS["openai"])
+
+
+def resolve_provider_defaults(addon_config):
+    provider = addon_config.get("provider", CONFIG_DEFAULTS["provider"])
+    defaults = dict(get_provider_defaults(provider))
+    if provider == "custom":
+        defaults["base_url"] = (addon_config.get("custom_base_url") or defaults["base_url"]).strip()
+        defaults["supports_response_format"] = bool(
+            addon_config.get("custom_supports_response_format", defaults["supports_response_format"])
+        )
+        if defaults.get("supports_disable_thinking"):
+            defaults["disable_thinking"] = bool(addon_config.get("custom_disable_thinking", True))
+    return defaults
 
 
 def normalize_api_key(api_key):
@@ -92,6 +118,9 @@ def migrate_config(raw_config=None):
         migrated["provider"] = CONFIG_DEFAULTS["provider"]
 
     migrated["model"] = (migrated.get("model") or "").strip()
+    migrated["custom_base_url"] = (migrated.get("custom_base_url") or CONFIG_DEFAULTS["custom_base_url"]).strip()
+    migrated["custom_supports_response_format"] = bool(migrated.get("custom_supports_response_format", False))
+    migrated["custom_disable_thinking"] = bool(migrated.get("custom_disable_thinking", True))
     migrated["generation_mode"] = normalize_generation_mode(migrated.get("generation_mode"))
 
     try:

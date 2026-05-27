@@ -46,6 +46,7 @@ try:  # pragma: no cover - exercised by Anki, not by headless tests.
         get_provider_defaults,
         migrate_config,
         normalize_api_key,
+        resolve_provider_defaults,
     )
 except ImportError:
     from formatters import (
@@ -86,6 +87,7 @@ except ImportError:
         get_provider_defaults,
         migrate_config,
         normalize_api_key,
+        resolve_provider_defaults,
     )
 
 try:
@@ -134,6 +136,11 @@ except Exception:
     QAction = QCheckBox = QComboBox = QDialog = QDialogButtonBox = QDoubleSpinBox = _UnavailableQt
     QFormLayout = QFrame = QGroupBox = QHBoxLayout = QLabel = QLineEdit = _UnavailableQt
     QPushButton = QScrollArea = QSizePolicy = QTabWidget = QVBoxLayout = QWidget = _UnavailableQt
+
+if not ANKI_AVAILABLE:  # pragma: no cover - keeps CLI smoke checks usable when aqt is installed.
+
+    def showInfo(message):
+        print(message)
 
 
 JAPANESE_CHAR_PATTERN = re.compile(
@@ -201,7 +208,7 @@ def set_cached_generation(cache_key, content):
 
 def generate_vocab_note(vocab_word: str, retries=3):
     provider = config.get("provider", "openai")
-    provider_defaults = get_provider_defaults(provider)
+    provider_defaults = resolve_provider_defaults(config)
     model = (config.get("model") or "").strip() or provider_defaults["model"]
     api_key = config.get(provider_defaults["api_key_config"])
     cache_key = generation_cache_key(vocab_word, provider, model)
@@ -486,6 +493,9 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
                 self.generation_mode.addItem(details["label"], mode)
 
             self.model = QLineEdit()
+            self.custom_base_url = QLineEdit()
+            self.custom_response_format = QCheckBox("Request JSON response format")
+            self.custom_disable_thinking = QCheckBox("Disable Qwen thinking")
             self.use_default_model = QCheckBox("Use provider default when model is blank")
             self.use_default_model.setChecked(True)
             self.cache_enabled = QCheckBox("Reuse recent identical generations")
@@ -516,6 +526,9 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             provider_form.addRow("Provider", self.provider)
             provider_form.addRow("Mode", self.generation_mode)
             provider_form.addRow("Model", model_row)
+            provider_form.addRow("Custom base URL", self.custom_base_url)
+            provider_form.addRow("", self.custom_response_format)
+            provider_form.addRow("", self.custom_disable_thinking)
             provider_form.addRow("", self.use_default_model)
             provider_form.addRow("", self.cache_enabled)
             provider_form.addRow("Temperature", self.temperature)
@@ -539,6 +552,7 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             self.openai_key = self.api_key_input()
             self.groq_key = self.api_key_input()
             self.openrouter_key = self.api_key_input()
+            self.custom_key = self.api_key_input()
 
             keys_tab = QWidget()
             keys_layout = QVBoxLayout(keys_tab)
@@ -547,6 +561,7 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             keys_form.addRow("OpenAI", self.openai_key)
             keys_form.addRow("Groq", self.groq_key)
             keys_form.addRow("OpenRouter", self.openrouter_key)
+            keys_form.addRow("Custom", self.custom_key)
             keys_layout.addWidget(keys_group)
             keys_layout.addStretch()
             self.tabs.addTab(keys_tab, "API Keys")
@@ -607,6 +622,11 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             provider = self.provider.currentText()
             defaults = get_provider_defaults(provider)
             self.model.setPlaceholderText(defaults["model"])
+            if hasattr(self, "custom_base_url"):
+                is_custom = provider == "custom"
+                self.custom_base_url.setEnabled(is_custom)
+                self.custom_response_format.setEnabled(is_custom)
+                self.custom_disable_thinking.setEnabled(is_custom)
             self.provider_hint.setText(f"{defaults['model']} at {defaults['base_url']}")
 
         def apply_default_model(self):
@@ -627,6 +647,10 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
                     "openai_api_key": self.openai_key.text().strip(),
                     "groq_api_key": self.groq_key.text().strip(),
                     "openrouter_api_key": self.openrouter_key.text().strip(),
+                    "custom_api_key": self.custom_key.text().strip(),
+                    "custom_base_url": self.custom_base_url.text().strip(),
+                    "custom_supports_response_format": self.custom_response_format.isChecked(),
+                    "custom_disable_thinking": self.custom_disable_thinking.isChecked(),
                     "model": self.model.text().strip(),
                     "temperature": self.temperature.value(),
                     "max_tokens": int(self.max_tokens.value()),
@@ -678,6 +702,10 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             self.openai_key.setText(config.get("openai_api_key", ""))
             self.groq_key.setText(config.get("groq_api_key", ""))
             self.openrouter_key.setText(config.get("openrouter_api_key", ""))
+            self.custom_key.setText(config.get("custom_api_key", ""))
+            self.custom_base_url.setText(config.get("custom_base_url", ""))
+            self.custom_response_format.setChecked(bool(config.get("custom_supports_response_format", False)))
+            self.custom_disable_thinking.setChecked(bool(config.get("custom_disable_thinking", True)))
             self.model.setText(config.get("model", ""))
             self.temperature.setValue(float(config.get("temperature", 0.5)))
             self.max_tokens.setValue(float(config.get("max_tokens", 15000)))

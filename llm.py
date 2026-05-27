@@ -4,9 +4,9 @@ from dataclasses import dataclass
 import requests
 
 try:
-    from .settings import get_provider_defaults, normalize_api_key
+    from .settings import get_provider_defaults, normalize_api_key, resolve_provider_defaults
 except ImportError:
-    from settings import get_provider_defaults, normalize_api_key
+    from settings import get_provider_defaults, normalize_api_key, resolve_provider_defaults
 
 
 @dataclass
@@ -34,7 +34,15 @@ def redact_payload(value):
     if isinstance(value, dict):
         redacted = {}
         for key, item in value.items():
-            if key.lower() in {"authorization", "api_key", "apikey", "openai_api_key", "groq_api_key", "openrouter_api_key"}:
+            if key.lower() in {
+                "authorization",
+                "api_key",
+                "apikey",
+                "openai_api_key",
+                "groq_api_key",
+                "openrouter_api_key",
+                "custom_api_key",
+            }:
                 redacted[key] = "[redacted]"
             else:
                 redacted[key] = redact_payload(item)
@@ -59,6 +67,8 @@ def build_chat_payload(vocab_word, system_prompt, addon_config, provider_default
     }
     if provider_defaults.get("supports_response_format"):
         payload["response_format"] = {"type": "json_object"}
+    if provider_defaults.get("disable_thinking"):
+        payload["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
     return payload
 
 
@@ -134,9 +144,9 @@ def extract_chat_content(response):
 
 def selected_provider(addon_config):
     provider = addon_config.get("provider", "openai")
-    defaults = get_provider_defaults(provider)
-    if provider not in {"openai", "groq", "openrouter"}:
+    if provider not in {"openai", "groq", "openrouter", "custom"}:
         provider = "openai"
+    defaults = resolve_provider_defaults({**addon_config, "provider": provider})
     return provider, defaults
 
 
@@ -161,4 +171,3 @@ def health_check(addon_config, system_prompt, user_content, notify=None, post=No
     except (KeyError, IndexError, TypeError, ValueError) as error:
         return HealthCheckResult(False, f"Unexpected provider response shape: {error}")
     return HealthCheckResult(True, content)
-
