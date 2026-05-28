@@ -327,13 +327,15 @@ def test_formatters_render_empty_fallbacks():
 def test_format_example_sentences_accepts_translation_variants():
     html = addon.format_exampleSentences_html(
         [
-            {"sentence": "駅に近いです。", "translation in zh-tw": "離車站很近。"},
-            {"sentence": "近いです。", "translation": "很近。"},
+            {"sentence": "駅に近いです。", "reading": "えきにちかいです。", "translation in zh-tw": "離車站很近。"},
+            {"sentence": "近いです。", "furigana": "ちかいです。", "translation": "很近。"},
             "近い。",
         ]
     )
 
     assert html.count("<li>") == 3
+    assert "えきにちかいです。" in html
+    assert "ちかいです。" in html
     assert "離車站很近。" in html
     assert "很近。" in html
 
@@ -863,7 +865,9 @@ def test_run_api_health_check_rejects_invalid_json(monkeypatch):
 def test_run_japanese_json_health_check_normalizes_translation(monkeypatch):
     payload = {
         "vocabulary": "近い",
-        "exampleSentences": [{"sentence": "駅に近いです。", "translation in zh-tw": "離車站很近。"}],
+        "exampleSentences": [
+            {"sentence": "駅に近いです。", "reading": "えきにちかいです。", "translation in zh-tw": "離車站很近。"}
+        ],
     }
 
     def fake_health_check(*args, **kwargs):
@@ -875,6 +879,19 @@ def test_run_japanese_json_health_check_normalizes_translation(monkeypatch):
 
     assert result.ok is True
     assert "succeeded" in result.message
+
+
+def test_japanese_note_normalizes_example_sentence_reading():
+    normalized = addon.normalize_japanese_note_data(
+        {
+            "vocabulary": "近い",
+            "exampleSentences": [
+                {"sentence": "駅に近いです。", "pronunciation": "えきにちかいです。", "translation": "離車站很近。"}
+            ],
+        }
+    )
+
+    assert normalized["exampleSentences"][0]["reading"] == "えきにちかいです。"
 
 
 def test_redact_payload_removes_secret_values():

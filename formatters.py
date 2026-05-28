@@ -196,10 +196,18 @@ def format_exampleSentences_html(exampleSentences):
     for exampleSentence in as_list(exampleSentences):
         if isinstance(exampleSentence, str):
             sentence = exampleSentence
+            reading = ""
             translation = ""
         else:
             exampleSentence = as_dict(exampleSentence)
             sentence = exampleSentence.get("sentence", "")
+            reading = (
+                exampleSentence.get("reading")
+                or exampleSentence.get("furigana")
+                or exampleSentence.get("pronunciation")
+                or exampleSentence.get("pronunciations")
+                or ""
+            )
             translation = (
                 exampleSentence.get("translation")
                 or exampleSentence.get("translation in zh-tw")
@@ -207,9 +215,10 @@ def format_exampleSentences_html(exampleSentences):
                 or ""
             )
         html_content += f"<li><strong>{html_text(sentence)}</strong>"
+        if reading:
+            html_content += f"<br><span><em>{html_text(reading)}</em></span>"
         if translation:
             html_content += f" - {html_text(translation)}"
         html_content += "</li>"
     html_content += "</ol>"
     return html_content
-

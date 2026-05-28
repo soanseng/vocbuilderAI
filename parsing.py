@@ -68,12 +68,19 @@ def normalize_japanese_note_data(note_data):
     example_sentences = []
     for example in as_list(note_data.get("exampleSentences")):
         if isinstance(example, str):
-            example_sentences.append({"sentence": example, "translation": ""})
+            example_sentences.append({"sentence": example, "reading": "", "translation": ""})
             continue
         example = as_dict(example)
         example_sentences.append(
             {
                 "sentence": example.get("sentence", ""),
+                "reading": (
+                    example.get("reading")
+                    or example.get("furigana")
+                    or example.get("pronunciation")
+                    or example.get("pronunciations")
+                    or ""
+                ),
                 "translation": (
                     example.get("translation")
                     or example.get("translation in zh-tw")
@@ -98,4 +105,3 @@ def normalize_japanese_note_data(note_data):
         "sound": note_data.get("sound") or "",
         "exampleSentences": example_sentences,
     }
-

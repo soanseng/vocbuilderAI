@@ -96,11 +96,11 @@ Required schema:
   },
   "sound": "https://forvo.com/word/{vocabulary}/#ja",
   "exampleSentences": [
-    {"sentence": "Japanese sentence 1.", "translation": "繁體中文翻譯 1"},
-    {"sentence": "Japanese sentence 2.", "translation": "繁體中文翻譯 2"},
-    {"sentence": "Japanese sentence 3.", "translation": "繁體中文翻譯 3"},
-    {"sentence": "Japanese sentence 4.", "translation": "繁體中文翻譯 4"},
-    {"sentence": "Japanese sentence 5.", "translation": "繁體中文翻譯 5"}
+    {"sentence": "Japanese sentence 1.", "reading": "full sentence reading in kana 1", "translation": "繁體中文翻譯 1"},
+    {"sentence": "Japanese sentence 2.", "reading": "full sentence reading in kana 2", "translation": "繁體中文翻譯 2"},
+    {"sentence": "Japanese sentence 3.", "reading": "full sentence reading in kana 3", "translation": "繁體中文翻譯 3"},
+    {"sentence": "Japanese sentence 4.", "reading": "full sentence reading in kana 4", "translation": "繁體中文翻譯 4"},
+    {"sentence": "Japanese sentence 5.", "reading": "full sentence reading in kana 5", "translation": "繁體中文翻譯 5"}
   ]
 }
 
@@ -108,7 +108,8 @@ Rules:
 - Keep all required keys present even when a value is uncertain.
 - Use empty strings for unknown scalar values, empty arrays for unknown lists, and empty
   objects for unavailable grammar groups.
-- Use exactly the key names shown above, especially "translation" in every example.
+- Use exactly the key names shown above, especially "reading" and "translation" in every example.
+- In every example sentence, set "reading" to the complete sentence reading in kana.
 - For a verb, fill "verbs" and leave unrelated groups empty.
 - For an adjective, fill "adjectives" and leave unrelated groups empty.
 - For a noun, fill "nouns" and leave unrelated groups empty.
@@ -138,7 +139,8 @@ Generation mode: Deep.
     "japanese": """
 Generation mode: Japanese.
 - Prioritize stable Japanese readings, part of speech, pitch accent, grammar, and natural examples.
-- Use the exact "translation" key for every example sentence.
+- Use the exact "reading" and "translation" keys for every example sentence.
+- Write "reading" as the complete sentence reading in kana.
 - Use Traditional Chinese for translations.
 """,
 }
