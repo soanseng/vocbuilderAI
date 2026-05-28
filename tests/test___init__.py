@@ -711,6 +711,23 @@ def test_on_add_note_populates_japanese_and_loads(monkeypatch):
     assert "近くない" in editor.note["Etymology, Synonyms and Antonyms"]
 
 
+def test_japanese_note_uses_furigana_for_speech(monkeypatch):
+    spoken = []
+    editor = DummyEditor("禁煙")
+    note_data = {
+        "vocabulary": "禁煙",
+        "kanji": "禁煙",
+        "furigana": "きんえん",
+        "explanations": {"zh-TW": "禁止吸菸"},
+    }
+    monkeypatch.setattr(addon, "generate_speech", lambda text: spoken.append(text) or "kinen.wav")
+
+    addon.populate_japanese_note(editor, note_data)
+
+    assert spoken == ["きんえん"]
+    assert "[sound:kinen.wav]" in editor.note["Sound"]
+
+
 def test_format_rule_group_renders_unlisted_keys():
     html = addon.format_rule_group("custom", {"Known": "yes", "Extra": "also"}, ["Known"])
 

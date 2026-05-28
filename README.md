@@ -104,6 +104,8 @@ For the GB10 Kokoro TTS service, set `Speech -> Provider` to `custom`, set the c
 - Sample rate: `24000`
 - Voice: leave blank to choose a live-verified voice automatically. English words use American `af_*` / `am_*` voices; Japanese words use `jf_*` / `jm_*` voices.
 
+Japanese TTS uses the generated `furigana` reading when available, so kanji such as `禁煙` are spoken from kana like `きんえん` instead of leaving pronunciation entirely to the TTS model.
+
 ### Health Checks
 Before generating cards, use these buttons in `Tools -> VocBuilderAI Settings`:
 
@@ -230,6 +232,8 @@ GB10 Kokoro TTS 可在 `Speech -> Provider` 選 `custom`，custom base URL 設�
 - Format：`wav`
 - Sample rate：`24000`
 - Voice：留空會自動選 live-verified voice。英文使用 American `af_*` / `am_*` voice；日文使用 `jf_*` / `jm_*` voice。
+
+日文 TTS 會優先使用生成出的 `furigana` 讀音；例如 `禁煙` 會用 `きんえん` 送進 TTS，避免只丟漢字時被模型誤讀。
 
 ### 健康檢查
 開始產生卡片前，建議在 `Tools -> VocBuilderAI Settings` 先測：

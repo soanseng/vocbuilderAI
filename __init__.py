@@ -455,11 +455,18 @@ def populate_english_note(editor, note_data):
     editor.note["Real-world examples"] = format_examples_html(word, note_data.get("realWorldExamples"))
 
 
+def japanese_speech_text(note_data, fallback):
+    furigana = (note_data.get("furigana") or "").strip()
+    if furigana:
+        return furigana
+    return fallback
+
+
 def populate_japanese_note(editor, note_data):
     note_data = normalize_japanese_note_data(note_data)
     vocabulary = note_data.get("vocabulary") or note_data.get("word") or editor.note.fields[0]
     explanations = note_data.get("explanations")
-    sound = generate_speech(vocabulary)
+    sound = generate_speech(japanese_speech_text(note_data, vocabulary))
 
     editor.note["vocabulary"] = format_vocabulary_html(vocabulary)
     editor.note["Pronunciations"] = format_partsOfSpeech_html(
