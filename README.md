@@ -36,7 +36,7 @@ Leave the model field blank to use VocBuilderAI's provider default. If Japanese 
 - Customizable decks, card types, and tags
 - Seamless Anki integration
 
-![demo](media/vocAI-demo-1.gif)
+<video src="media/vocAI-demo-1.mp4" controls muted loop></video>
 
 ### Installation
 1. Download `vocbuilderai-*.ankiaddon` from the GitHub Releases page.
@@ -65,12 +65,15 @@ Keep `meta.json` inside the Anki add-on directory. It is user-specific and may c
 
 ### Note Type Setup
 Create a note type called "vocbuilderAI" with these fields:
-- Vocabulary
-- Detail definition
+- vocabulary
+- detail definition
 - Pronunciations
 - Sound
-- Etymology, Synonyms, and Antonyms
+- Etymology, Synonyms and Antonyms
 - Real-world examples
+
+Field matching ignores case, spaces, and commas, so note types created with names
+like `Vocabulary` or `Etymology, Synonyms, and Antonyms` also work.
 
 ### Configuration
 Open `Tools -> VocBuilderAI Settings` and configure these tabs:
@@ -89,7 +92,7 @@ Generation modes:
 
 Leave the model field blank to use the provider default.
 
-For the GB10 LiteLLM service, choose `custom`, set the custom base URL to `http://your-litellm-server:4000/v1`, and use one of these models:
+For a self-hosted LiteLLM service, choose `custom`, set the custom base URL to your endpoint (for example `http://your-litellm-server:4000/v1`), and use one of these models:
 
 - `qwen36-fast`
 - `qwen36-deep`
@@ -97,7 +100,7 @@ For the GB10 LiteLLM service, choose `custom`, set the custom base URL to `http:
 
 Keep `Disable Qwen thinking` enabled for these models. It sends the vLLM/LiteLLM `enable_thinking=false` option so the add-on receives final JSON in `message.content`.
 
-For the GB10 Kokoro TTS service, set `Speech -> Provider` to `custom`, set the custom base URL to `http://your-tts-server:8001/v1`, and use:
+For a self-hosted Kokoro TTS (Speaches) service, set `Speech -> Provider` to `custom`, set the custom base URL to your endpoint (for example `http://your-tts-server:8001/v1`), and use:
 
 - Model: `speaches-ai/Kokoro-82M-v1.0-ONNX`
 - Format: `wav`
@@ -125,9 +128,9 @@ If a check fails, change the API key, provider, or model before creating cards.
 
 For Japanese vocabulary, use the `Japanese` generation mode if you want more consistent readings, grammar, and Traditional Chinese translations.
 
-![screenshot1](media/sceenshot-1.png)
-![screenshot2](media/sceenshot-2.png)
-![screenshot3](media/sceenshot-3.png)
+![screenshot1](media/screenshot-1.png)
+![screenshot2](media/screenshot-2.png)
+![screenshot3](media/screenshot-3.png)
 
 ### Troubleshooting
 - `Unsupported parameter: max_tokens`: update to the latest add-on version. OpenAI uses `max_completion_tokens`.
@@ -194,16 +197,15 @@ ln -sf "$PWD/formatters.py" ~/.local/share/Anki2/addons21/voc_builder_ai/formatt
 
 ### 筆記類型設定
 建立名為 "vocbuilderAI" 的筆記類型，包含以下欄位：
-- Vocabulary
-- Detail definition
+- vocabulary
+- detail definition
 - Pronunciations
 - Sound
 - Etymology, Synonyms and Antonyms
 - Real-world examples
 
-### 設定選項
-打開 `Tools -> VocBuilderAI Settings` 後設定這幾個分頁：
-
+欄位比對會忽略大小寫、空格與逗號，所以用 `Vocabulary` 或 `Etymology, Synonyms, and Antonyms`
+這類名稱建立的欄位也可以正常運作。
 - `Generation`：選擇 OpenAI、Groq、OpenRouter 或 Custom；設定生成模式、model、temperature、max tokens 和快取。
 - `API Keys`：填入你要使用的 provider API key。
 - `Anki`：設定預設 deck、tag 和 note type。
@@ -218,7 +220,7 @@ ln -sf "$PWD/formatters.py" ~/.local/share/Anki2/addons21/voc_builder_ai/formatt
 
 Model 欄位留空時，會使用 provider 的預設模型。
 
-GB10 LiteLLM 可選 `custom`，custom base URL 設成 `http://your-litellm-server:4000/v1`，model 可用：
+自架 LiteLLM 服務可選 `custom`，custom base URL 設成你的 endpoint（例如 `http://your-litellm-server:4000/v1`），model 可用：
 
 - `qwen36-fast`
 - `qwen36-deep`
@@ -226,7 +228,7 @@ GB10 LiteLLM 可選 `custom`，custom base URL 設成 `http://your-litellm-serve
 
 這幾個模型建議保持 `Disable Qwen thinking` 開啟。它會送出 vLLM/LiteLLM 的 `enable_thinking=false` 選項，讓 add-on 可以在 `message.content` 收到最終 JSON。
 
-GB10 Kokoro TTS 可在 `Speech -> Provider` 選 `custom`，custom base URL 設成 `http://your-tts-server:8001/v1`，並使用：
+自架 Kokoro TTS（Speaches）服務可在 `Speech -> Provider` 選 `custom`，custom base URL 設成你的 endpoint（例如 `http://your-tts-server:8001/v1`），並使用：
 
 - Model：`speaches-ai/Kokoro-82M-v1.0-ONNX`
 - Format：`wav`

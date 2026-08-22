@@ -1,3 +1,6 @@
+import html
+import re
+
 try:
     from .parsing import as_dict, as_list
 except ImportError:
@@ -5,9 +8,9 @@ except ImportError:
 
 
 def html_text(value, fallback=""):
-    if value is None:
+    if value is None or not str(value).strip():
         return fallback
-    return str(value)
+    return html.escape(str(value).strip(), quote=True)
 
 
 def join_values(value):
@@ -100,10 +103,12 @@ def format_antonyms_html(antonyms):
 
 def format_examples_html(vocab_word, examples):
     html_content = "<h3>Real-world Examples:</h3><ul>"
+    bold_word = html.escape(str(vocab_word), quote=True)
+    bold_pattern = re.compile(rf"\b{re.escape(bold_word)}\b", re.IGNORECASE)
     for example in as_list(examples):
         example = html_text(example)
-        bold_word = example.replace(str(vocab_word), f"<strong>{vocab_word}</strong>")
-        html_content += f"<li>{bold_word}</li>"
+        example = bold_pattern.sub(f"<strong>{bold_word}</strong>", example)
+        html_content += f"<li>{example}</li>"
     html_content += "</ul>"
     return html_content
 

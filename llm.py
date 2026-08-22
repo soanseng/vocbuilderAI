@@ -21,6 +21,18 @@ def chat_completions_url(base_url):
     return f"{base_url.rstrip('/')}/chat/completions"
 
 
+RETRYABLE_HTTP_STATUS = {408, 429}
+
+
+def should_retry_status(status_code):
+    """Retry only transient failures; deterministic 4xx like 400/401 fail fast."""
+    if status_code is None:
+        return True
+    if status_code in RETRYABLE_HTTP_STATUS:
+        return True
+    return 500 <= status_code < 600
+
+
 def redact_secret(value):
     if not value:
         return value
@@ -119,6 +131,7 @@ def llm_api_request(
 
     full_url = chat_completions_url(base_url)
     headers = provider_headers(api_key, provider)
+    response = None
 
     for attempt in range(retries):
         try:
@@ -126,15 +139,21 @@ def llm_api_request(
             response.raise_for_status()
             return response
         except requests.exceptions.HTTPError as error:
-            if attempt < retries - 1:
+            status = getattr(response, "status_code", None)
+            if attempt < retries - 1 and should_retry_status(status):
                 sleeper(2)
                 continue
-            notify(format_http_error(error, response, full_url))
+            if response is not None:
+                notify(format_http_error(error, response, full_url))
+            else:
+                notify(f"LLM HTTP error:\n{error}\nURL: {full_url}")
+            return None
         except requests.exceptions.RequestException as error:
             if attempt < retries - 1:
                 sleeper(2)
                 continue
             notify(f"LLM request error:\n{error}\nURL: {full_url}")
+            return None
     return None
 
 

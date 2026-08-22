@@ -6,7 +6,7 @@ __pycache__
 .coverage
 htmlcov/
 poetry.lock
-pyproject.toml
+meta.json
 .vscode
 .DS_Store
 *.ankiaddon
@@ -21,7 +21,6 @@ venv/
 .idea/
 
 #ai-related rules
-claude.md
 
 #uv setting
 uv.lock

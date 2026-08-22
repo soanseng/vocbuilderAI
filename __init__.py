@@ -1,4 +1,5 @@
 import hashlib
+import html
 import random
 import re
 import sys
@@ -31,7 +32,7 @@ try:  # pragma: no cover - exercised by Anki, not by headless tests.
         html_text,
         join_values,
     )
-    from .llm import build_chat_payload, chat_completions_url, extract_chat_content
+    from .llm import build_chat_payload, chat_completions_url, extract_chat_content, should_retry_status
     from .llm import health_check as provider_health_check
     from .llm import llm_api_request as perform_llm_api_request
     from .parsing import clean_response, normalize_english_note_data, normalize_japanese_note_data
@@ -72,7 +73,7 @@ except ImportError:
         html_text,
         join_values,
     )
-    from llm import build_chat_payload, chat_completions_url, extract_chat_content
+    from llm import build_chat_payload, chat_completions_url, extract_chat_content, should_retry_status
     from llm import health_check as provider_health_check
     from llm import llm_api_request as perform_llm_api_request
     from parsing import clean_response, normalize_english_note_data, normalize_japanese_note_data
@@ -116,7 +117,7 @@ try:
         QVBoxLayout,
         QWidget,
     )
-    from aqt.utils import showInfo
+    from aqt.utils import showInfo, tooltip
     from anki.notes import Note
 
     ANKI_AVAILABLE = mw is not None and getattr(mw, "form", None) is not None
@@ -129,6 +130,9 @@ except Exception:
 
     def showInfo(message):
         print(message)
+    def tooltip(message):
+        print(message)
+
 
     class _UnavailableQt:
         def __init__(self, *args, **kwargs):
@@ -159,6 +163,8 @@ def load_addon_config():
 config = load_addon_config()
 GENERATION_CACHE = {}
 CACHE_TTL_SECONDS = 300
+SPEECH_CACHE = {}
+
 OPENAI_TTS_VOICES = [
     "alloy",
     "ash",
@@ -215,15 +221,78 @@ KOKORO_LEGACY_ENGLISH_MODEL = "csukuangfj/kokoro-en-v0_19"
 def is_japanese_vocab(vocab_word):
     return bool(vocab_word and JAPANESE_CHAR_PATTERN.search(str(vocab_word)))
 
+CANONICAL_NOTE_FIELDS = [
+    "vocabulary",
+    "detail definition",
+    "Pronunciations",
+    "Sound",
+    "Etymology, Synonyms and Antonyms",
+    "Real-world examples",
+]
 
-def llm_api_request(payload, api_key, base_url, retries=3, provider="openai"):
+
+def clean_vocab_input(value):
+    text = re.sub(r"<[^>]+>", " ", str(value or ""))
+    text = html.unescape(text)
+    return " ".join(text.split())
+
+
+class MissingNoteFieldsError(ValueError):
+    def __init__(self, missing, available):
+        self.missing = list(missing)
+        self.available = list(available)
+        missing_lines = "\n".join(f"- {name}" for name in self.missing)
+        available_text = ", ".join(self.available) if self.available else "(none)"
+        super().__init__(
+            "This note type is missing fields that VocBuilderAI writes:\n"
+            f"{missing_lines}\n\n"
+            f"Fields on this note type: {available_text}\n"
+            "Add the missing fields (or rename existing ones) in Tools -> Manage Note Types."
+        )
+
+
+def _normalized_field_name(name):
+    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+
+
+def resolve_note_fields(note, required_fields=CANONICAL_NOTE_FIELDS):
+    """Map canonical field names onto the note's actual field keys.
+
+    Matching ignores case, whitespace, and commas, so note types created with
+    field lists like "Vocabulary" or "Etymology, Synonyms, and Antonyms" keep
+    working. Raises MissingNoteFieldsError listing anything absent so users
+    get a clear diagnostic before any API call is made.
+    """
+    try:
+        available = list(note.keys())
+    except Exception:
+        available = []
+    if not available:
+        # Plain dict notes (tests, pre-population) accept canonical names.
+        return {field: field for field in required_fields}
+    normalized = {_normalized_field_name(key): key for key in available}
+    mapping = {}
+    missing = []
+    for field in required_fields:
+        actual = normalized.get(_normalized_field_name(field))
+        if actual is None:
+            missing.append(field)
+        else:
+            mapping[field] = actual
+    if missing:
+        raise MissingNoteFieldsError(missing, available)
+    return mapping
+
+
+
+def llm_api_request(payload, api_key, base_url, retries=3, provider="openai", notify=None):
     return perform_llm_api_request(
         payload,
         api_key,
         base_url,
         retries=retries,
         provider=provider,
-        notify=showInfo,
+        notify=notify or showInfo,
         post=requests.post,
         sleeper=time.sleep,
     )
@@ -254,11 +323,17 @@ def get_cached_generation(cache_key):
 
 
 def set_cached_generation(cache_key, content):
-    if config.get("cache_enabled", True) and content:
-        GENERATION_CACHE[cache_key] = (time.time(), content)
+    if not (config.get("cache_enabled", True) and content):
+        return
+    now = time.time()
+    for key, (timestamp, _cached) in list(GENERATION_CACHE.items()):
+        if now - timestamp > CACHE_TTL_SECONDS:
+            GENERATION_CACHE.pop(key, None)
+    GENERATION_CACHE[cache_key] = (now, content)
 
 
-def generate_vocab_note(vocab_word: str, retries=3):
+def generate_vocab_note(vocab_word: str, retries=3, notify=None):
+    notify = notify or showInfo
     provider = config.get("provider", "openai")
     provider_defaults = resolve_provider_defaults(config)
     model = (config.get("model") or "").strip() or provider_defaults["model"]
@@ -281,6 +356,7 @@ def generate_vocab_note(vocab_word: str, retries=3):
         provider_defaults["base_url"],
         retries=retries,
         provider=provider,
+        notify=notify,
     )
     if response is None:
         return None
@@ -290,14 +366,18 @@ def generate_vocab_note(vocab_word: str, retries=3):
         set_cached_generation(cache_key, content)
         return content
     except (KeyError, IndexError, TypeError, ValueError) as error:
-        showInfo(f"LLM returned an unexpected response shape:\n{error}")
+        notify(f"LLM returned an unexpected response shape:\n{error}")
         return None
 
 
 def prompt_for_vocab(vocab_word):
     mode = config.get("generation_mode", "standard")
-    if config.get("generation_mode") == "japanese" or is_japanese_vocab(vocab_word):
-        return with_generation_mode(JPY_PROMPT, "japanese" if mode == "japanese" else mode)
+    if is_japanese_vocab(vocab_word):
+        return with_generation_mode(JPY_PROMPT, mode)
+    if mode == "japanese":
+        # An English word typed while Japanese mode is selected would produce
+        # an empty card; fall back to the English schema.
+        mode = "standard"
     return with_generation_mode(VOC_PROMPT, mode)
 
 
@@ -360,7 +440,7 @@ def speech_settings(input_text=""):
 
     if provider == "custom":
         api_key = normalize_api_key(config.get("speech_api_key"))
-        base_url = config.get("speech_base_url") or "http://your-tts-server:8001/v1"
+        base_url = config.get("speech_base_url") or CONFIG_DEFAULTS["speech_base_url"]
         configured_model = config.get("speech_model")
         model = (
             KOKORO_TTS_MODEL
@@ -368,47 +448,56 @@ def speech_settings(input_text=""):
             else configured_model
         )
         response_format = config.get("speech_response_format") or "wav"
-        voices = KOKORO_JAPANESE_VOICES if is_japanese_text else KOKORO_RANDOM_AMERICAN_VOICES
+        if is_japanese_text:
+            voices = KOKORO_JAPANESE_VOICES
+            random_pool = KOKORO_JAPANESE_VOICES
+        else:
+            voices = KOKORO_AMERICAN_VOICES
+            random_pool = KOKORO_RANDOM_AMERICAN_VOICES
     else:
         api_key = normalize_api_key(config.get("speech_api_key")) or normalize_api_key(config.get("openai_api_key"))
         base_url = "https://api.openai.com/v1"
         model = config.get("speech_model") or "gpt-4o-mini-tts"
         response_format = config.get("speech_response_format") or "mp3"
         voices = OPENAI_TTS_VOICES
+        random_pool = OPENAI_TTS_VOICES
 
     configured_voice = config.get("speech_voice")
-    voice = configured_voice if configured_voice in voices else random.choice(voices)
+    if configured_voice in voices:
+        voice = configured_voice
+    else:
+        # Seed per text so the same word always gets the same random voice;
+        # repeated generations then produce identical media Anki can dedupe.
+        random.seed(hashlib.md5(str(input_text).encode()).hexdigest())
+        voice = random.choice(random_pool)
     return provider, api_key, audio_speech_url(base_url), model, voice, response_format
 
 
-def generate_speech(vocab_word, retries=3):
-    provider, api_key, url, speech_model, speech_voice, response_format = speech_settings(vocab_word)
+def fetch_speech_audio(vocab_word, retries=3, notify=None, settings=None):
+    """Fetch spoken audio over the network. Returns (audio_bytes, extension) or None."""
+    notify = notify or showInfo
+    provider, api_key, url, speech_model, speech_voice, response_format = (
+        settings or speech_settings(vocab_word)
+    )
     if not api_key:
         return None
 
-    temp_file_path = None
-    payload = {}
+    payload = {
+        "model": speech_model,
+        "voice": speech_voice,
+        "input": str(vocab_word),
+    }
+    if provider == "custom":
+        payload["response_format"] = response_format
+        payload["sample_rate"] = int(config.get("speech_sample_rate", 24000))
+    else:
+        payload["instructions"] = "Speak clearly and naturally. Use Japanese pronunciation for Japanese text."
+        payload["speed"] = float(config.get("speech_speed", 1.0))
+        if response_format != "mp3":
+            payload["response_format"] = response_format
+
     for attempt in range(retries):
         try:
-            hashed_vocab = hashlib.md5(str(vocab_word).encode()).hexdigest()
-            extension = speech_file_extension(response_format)
-            temp_file_path = Path(__file__).parent / f"vocbuilderai-{hashed_vocab}.{extension}"
-            input_text = str(vocab_word)
-
-            payload = {
-                "model": speech_model,
-                "voice": speech_voice,
-                "input": input_text,
-            }
-            if provider == "custom":
-                payload["response_format"] = response_format
-                payload["sample_rate"] = int(config.get("speech_sample_rate", 24000))
-            else:
-                payload["instructions"] = "Speak clearly and naturally. Use Japanese pronunciation for Japanese text."
-                payload["speed"] = float(config.get("speech_speed", 1.0))
-                if response_format != "mp3":
-                    payload["response_format"] = response_format
-
             response = requests.post(
                 url,
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -416,21 +505,68 @@ def generate_speech(vocab_word, retries=3):
                 timeout=60,
             )
             response.raise_for_status()
-
-            with open(temp_file_path, "wb") as audio_file:
-                audio_file.write(response.content)
-
-            final_file_name = mw.col.media.addFile(temp_file_path)
-            temp_file_path.unlink(missing_ok=True)
-            return final_file_name
+            return response.content, speech_file_extension(response_format)
+        except requests.exceptions.HTTPError as error:
+            status = getattr(response, "status_code", None)
+            if attempt < retries - 1 and should_retry_status(status):
+                time.sleep(2)
+                continue
+            notify(f"Speech Error:\n{error}\nPayload: {payload}")
+            return None
         except Exception as error:
             if attempt < retries - 1:
                 time.sleep(2)
                 continue
-            showInfo(f"Speech Error:\n{error}\nPayload: {payload}")
-            if temp_file_path:
-                temp_file_path.unlink(missing_ok=True)
+            notify(f"Speech Error:\n{error}\nPayload: {payload}")
             return None
+    return None
+
+
+def save_speech_media(audio_content, vocab_word, extension):
+    hashed_vocab = hashlib.md5(str(vocab_word).encode()).hexdigest()
+    temp_file_path = Path(__file__).parent / f"vocbuilderai-{hashed_vocab}.{extension}"
+    try:
+        with open(temp_file_path, "wb") as audio_file:
+            audio_file.write(audio_content)
+        return mw.col.media.addFile(temp_file_path)
+    finally:
+        temp_file_path.unlink(missing_ok=True)
+
+
+def generate_speech(vocab_word, retries=3):
+    settings = speech_settings(vocab_word)
+    _provider, _api_key, _url, model, voice, response_format = settings
+    cache_key = (str(vocab_word), model, voice, response_format)
+    fetched = SPEECH_CACHE.pop(cache_key, None)
+    if fetched is None:
+        fetched = fetch_speech_audio(vocab_word, retries=retries, settings=settings)
+    if fetched is None:
+        return None
+    audio_content, extension = fetched
+    try:
+        return save_speech_media(audio_content, vocab_word, extension)
+    except Exception as error:
+        showInfo(f"Speech Error:\n{error}")
+        return None
+
+
+def prewarm_speech(speech_text, notify=None):
+    """Fetch TTS audio off the main thread so populate can reuse it without network."""
+    settings = speech_settings(speech_text)
+    fetched = fetch_speech_audio(speech_text, notify=notify, settings=settings)
+    if fetched is None:
+        return None
+    _provider, _api_key, _url, model, voice, response_format = settings
+    SPEECH_CACHE[(str(speech_text), model, voice, response_format)] = fetched
+    return fetched
+
+
+def prewarm_speech_for_note(vocab_word, note_data, notify=None):
+    if is_japanese_vocab(vocab_word):
+        speech_text = japanese_speech_text(note_data, vocab_word)
+    else:
+        speech_text = str(note_data.get("word") or vocab_word)
+    prewarm_speech(speech_text, notify=notify)
 
 
 def sound_reference(sound_file):
@@ -439,20 +575,24 @@ def sound_reference(sound_file):
 
 def populate_english_note(editor, note_data):
     note_data = normalize_english_note_data(note_data)
+    field_map = resolve_note_fields(editor.note)
     word = note_data.get("word") or editor.note.fields[0]
-    editor.note["vocabulary"] = format_vocabulary_html(word)
-    editor.note["Pronunciations"] = format_pronunciations_html(note_data.get("pronunciation"))
+    note = editor.note
+    note[field_map["vocabulary"]] = format_vocabulary_html(word)
+    note[field_map["Pronunciations"]] = (
+        format_pronunciations_html(note_data.get("pronunciation")) if note_data.get("pronunciation") else ""
+    )
     sound = generate_speech(word)
-    editor.note["Sound"] = format_sound_html(note_data.get("soundLink")) + sound_reference(sound)
-    editor.note["detail definition"] = format_meanings_html(note_data.get("meanings")) + format_definitions_html(
+    note[field_map["Sound"]] = format_sound_html(note_data.get("soundLink")) + sound_reference(sound)
+    note[field_map["detail definition"]] = format_meanings_html(note_data.get("meanings")) + format_definitions_html(
         note_data.get("definitions")
     )
-    editor.note["Etymology, Synonyms and Antonyms"] = (
+    note[field_map["Etymology, Synonyms and Antonyms"]] = (
         format_etymology_html(note_data.get("etymology"))
         + format_synonyms_html(note_data.get("synonyms"))
         + format_antonyms_html(note_data.get("antonyms"))
     )
-    editor.note["Real-world examples"] = format_examples_html(word, note_data.get("realWorldExamples"))
+    note[field_map["Real-world examples"]] = format_examples_html(word, note_data.get("realWorldExamples"))
 
 
 def japanese_speech_text(note_data, fallback):
@@ -464,51 +604,87 @@ def japanese_speech_text(note_data, fallback):
 
 def populate_japanese_note(editor, note_data):
     note_data = normalize_japanese_note_data(note_data)
+    field_map = resolve_note_fields(editor.note)
     vocabulary = note_data.get("vocabulary") or note_data.get("word") or editor.note.fields[0]
     explanations = note_data.get("explanations")
     sound = generate_speech(japanese_speech_text(note_data, vocabulary))
 
-    editor.note["vocabulary"] = format_vocabulary_html(vocabulary)
-    editor.note["Pronunciations"] = format_partsOfSpeech_html(
-        note_data.get("partsOfSpeech")
-    ) + format_pronunciations_html(note_data.get("pronunciations"))
-    editor.note["Sound"] = format_sound_html(note_data.get("sound")) + sound_reference(sound)
-    editor.note["detail definition"] = (
-        format_kanji_html(note_data.get("kanji", vocabulary))
-        + "<br>"
-        + format_furigana_html(note_data.get("furigana"))
-        + "<br>"
-        + format_pitchPattern_html(note_data.get("pitchPattern"))
-        + "<br>"
-        + format_meanings_html(explanations)
-        + "<br>"
-        + format_explanations_html(explanations)
-    )
-    editor.note["Etymology, Synonyms and Antonyms"] = format_grammaticalRules_html(
+    note = editor.note
+    note[field_map["vocabulary"]] = format_vocabulary_html(vocabulary)
+    pronunciation_sections = []
+    if note_data.get("partsOfSpeech"):
+        pronunciation_sections.append(format_partsOfSpeech_html(note_data.get("partsOfSpeech")))
+    if note_data.get("pronunciations"):
+        pronunciation_sections.append(format_pronunciations_html(note_data.get("pronunciations")))
+    note[field_map["Pronunciations"]] = "".join(pronunciation_sections)
+    note[field_map["Sound"]] = format_sound_html(note_data.get("sound")) + sound_reference(sound)
+    definition_sections = [format_kanji_html(note_data.get("kanji") or vocabulary)]
+    if note_data.get("furigana"):
+        definition_sections.append(format_furigana_html(note_data.get("furigana")))
+    if note_data.get("pitchPattern"):
+        definition_sections.append(format_pitchPattern_html(note_data.get("pitchPattern")))
+    definition_sections.append(format_meanings_html(explanations))
+    definition_sections.append(format_explanations_html(explanations))
+    note[field_map["detail definition"]] = "<br>".join(definition_sections)
+    note[field_map["Etymology, Synonyms and Antonyms"]] = format_grammaticalRules_html(
         note_data.get("grammaticalRules")
     )
-    editor.note["Real-world examples"] = format_exampleSentences_html(note_data.get("exampleSentences"))
+    note[field_map["Real-world examples"]] = format_exampleSentences_html(note_data.get("exampleSentences"))
+
+
+def generate_note_data(vocab_word, notify=None):
+    response = generate_vocab_note(vocab_word, notify=notify)
+    if response is None:
+        return None
+    return parse_response(response, notify=notify) or None
 
 
 def on_add_note(editor: Editor):
-    vocab_word = editor.note.fields[0]
+    vocab_word = clean_vocab_input(editor.note.fields[0])
     if not vocab_word:
         showInfo("No vocabulary word entered. Please enter a word in the 'vocabulary' field.")
         return
-
-    response = generate_vocab_note(vocab_word)
-    note_data = process_response(response)
-    if not note_data:
+    try:
+        resolve_note_fields(editor.note)
+    except MissingNoteFieldsError as error:
+        showInfo(str(error))
         return
 
-    try:
-        if is_japanese_vocab(vocab_word):
-            populate_japanese_note(editor, note_data)
-        else:
-            populate_english_note(editor, note_data)
-        editor.loadNote()
-    except Exception as error:
-        showInfo(f"Error on add note: {error}")
+    def work():
+        messages = []
+        note_data = generate_note_data(vocab_word, notify=messages.append)
+        if note_data is not None:
+            prewarm_speech_for_note(vocab_word, note_data, notify=messages.append)
+        return note_data, messages
+
+    def finish(result):
+        note_data, messages = result
+        for message in messages:
+            showInfo(message)
+        if note_data is None:
+            return
+        try:
+            if is_japanese_vocab(vocab_word):
+                populate_japanese_note(editor, note_data)
+            else:
+                populate_english_note(editor, note_data)
+            editor.loadNote()
+        except Exception as error:
+            showInfo(f"Error on add note: {error}")
+
+    taskman = getattr(mw, "taskman", None) if ANKI_AVAILABLE else None
+    if taskman is not None:
+        tooltip("VocBuilderAI: generating…")
+
+        def on_done(future):
+            try:
+                finish(future.result())
+            except Exception as error:
+                showInfo(f"Error on add note: {error}")
+
+        taskman.run_in_background(work, on_done, uses_collection=False)
+    else:
+        finish(work())
 
 
 def add_note_to_deck(deck_name, tag_name, note_data):  # pragma: no cover - requires a live Anki collection.
@@ -541,8 +717,6 @@ def add_note_to_deck(deck_name, tag_name, note_data):  # pragma: no cover - requ
 
     note.addTag(tag_name)
     mw.col.addNote(note)
-    mw.col.decks.save()
-    mw.col.save()
 
 
 def add_action_button(buttons, editor: Editor):  # pragma: no cover - requires Anki editor UI.
@@ -789,30 +963,33 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             )
 
         def test_api(self):
-            global config
             previous_config = dict(config)
             config.update(self.current_form_config())
-            result = run_api_health_check("apple")
-            config.clear()
-            config.update(previous_config)
+            try:
+                result = run_api_health_check("apple")
+            finally:
+                config.clear()
+                config.update(previous_config)
             showInfo(result.message)
 
         def test_japanese_json(self):
-            global config
             previous_config = dict(config)
             config.update(self.current_form_config())
-            result = run_japanese_json_health_check()
-            config.clear()
-            config.update(previous_config)
+            try:
+                result = run_japanese_json_health_check()
+            finally:
+                config.clear()
+                config.update(previous_config)
             showInfo(result.message)
 
         def test_speech(self):
-            global config
             previous_config = dict(config)
             config.update(self.current_form_config())
-            sound_file = generate_speech("VocBuilderAI", retries=1)
-            config.clear()
-            config.update(previous_config)
+            try:
+                sound_file = generate_speech("VocBuilderAI", retries=1)
+            finally:
+                config.clear()
+                config.update(previous_config)
             if sound_file:
                 showInfo("Text-to-speech generation succeeded.")
             else:

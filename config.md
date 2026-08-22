@@ -31,7 +31,7 @@
 - groq_api_key: Groq API key from https://console.groq.com
 - openrouter_api_key: OpenRouter API key from https://openrouter.ai
 - custom_api_key: API key for an OpenAI-compatible custom provider, such as LiteLLM
-- custom_base_url: Base URL for the custom provider. For the GB10 LiteLLM service, use `http://your-litellm-server:4000/v1`
+- custom_base_url: Base URL for the custom provider, for example a self-hosted LiteLLM service (`http://your-litellm-server:4000/v1`)
 - custom_supports_response_format: Whether to send OpenAI `response_format={"type":"json_object"}` to the custom provider
 - custom_disable_thinking: Whether to send `extra_body.chat_template_kwargs.enable_thinking=false` for Qwen/vLLM custom providers
 - provider: LLM provider to use (openai, groq, openrouter, or custom)
@@ -50,7 +50,7 @@
 - temperature: Controls randomness (0.0-1.0). Lower = more deterministic
 - speech_provider: Speech provider to use (`openai` or `custom`)
 - speech_api_key: Optional speech-only API key. For OpenAI speech, leave this blank/placeholder to reuse `openai_api_key`. For GB10 Kokoro TTS, set this to the Speaches API key.
-- speech_base_url: Base URL for custom OpenAI-compatible TTS. For GB10 Kokoro TTS, use `http://your-tts-server:8001/v1`
+- speech_base_url: Base URL for custom OpenAI-compatible TTS, for example a self-hosted Speaches/Kokoro service (`http://your-tts-server:8001/v1`)
 - speech_voice: Voice for speech synthesis (empty for random). GB10 Kokoro random voices use the American `af_*` and `am_*` voice list.
 - speech_model: Speech model. For GB10 Kokoro TTS with English and Japanese voices, use `speaches-ai/Kokoro-82M-v1.0-ONNX`
 - speech_response_format: Audio format. Leave blank for provider default (`mp3` for OpenAI, `wav` for GB10 Kokoro TTS).

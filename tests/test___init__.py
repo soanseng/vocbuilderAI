@@ -21,6 +21,7 @@ import prompts
 
 def setup_function():
     addon.GENERATION_CACHE.clear()
+    addon.SPEECH_CACHE.clear()
 
 
 class DummyNote(dict):
@@ -77,14 +78,15 @@ def test_japanese_note_population_tolerates_sparse_openrouter_response(monkeypat
 
 def test_on_add_note_handles_missing_llm_response_without_crashing(monkeypatch):
     messages = []
+    monkeypatch.setattr(addon, "generate_vocab_note", lambda word, notify=None: None)
     editor = DummyEditor("近い")
-    monkeypatch.setattr(addon, "generate_vocab_note", lambda word: None)
     monkeypatch.setattr(addon, "showInfo", messages.append)
 
     addon.on_add_note(editor)
 
     assert editor.loaded is False
-    assert messages == ["No note data was returned by the LLM."]
+    # The request layer already reported the real error; no duplicate dialog.
+    assert messages == []
 
 
 def test_openrouter_generation_omits_response_format(monkeypatch):
@@ -94,7 +96,7 @@ def test_openrouter_generation_omits_response_format(monkeypatch):
         def json(self):
             return {"choices": [{"message": {"content": json.dumps({"vocabulary": "近い"})}}]}
 
-    def fake_request(payload, api_key, base_url, retries=3, provider="openai"):
+    def fake_request(payload, api_key, base_url, retries=3, provider="openai", notify=None):
         captured.update(
             {
                 "payload": payload,
@@ -115,7 +117,7 @@ def test_openrouter_generation_omits_response_format(monkeypatch):
     assert json.loads(result) == {"vocabulary": "近い"}
     assert captured["provider"] == "openrouter"
     assert captured["payload"]["model"] == "openai/gpt-4o-mini"
-    assert captured["payload"]["max_tokens"] == 15000
+    assert captured["payload"]["max_tokens"] == 4096
     assert "max_completion_tokens" not in captured["payload"]
     assert "response_format" not in captured["payload"]
 
@@ -127,7 +129,7 @@ def test_openai_generation_includes_json_response_format(monkeypatch):
         def json(self):
             return {"choices": [{"message": {"content": json.dumps({"word": "apple"})}}]}
 
-    def fake_request(payload, api_key, base_url, retries=3, provider="openai"):
+    def fake_request(payload, api_key, base_url, retries=3, provider="openai", notify=None):
         captured.update({"payload": payload, "api_key": api_key, "base_url": base_url, "provider": provider})
         return Response()
 
@@ -141,7 +143,7 @@ def test_openai_generation_includes_json_response_format(monkeypatch):
     assert json.loads(result) == {"word": "apple"}
     assert captured["provider"] == "openai"
     assert captured["payload"]["model"] == "5.4-nano"
-    assert captured["payload"]["max_completion_tokens"] == 15000
+    assert captured["payload"]["max_completion_tokens"] == 4096
     assert "max_tokens" not in captured["payload"]
     assert captured["payload"]["response_format"] == {"type": "json_object"}
 
@@ -153,7 +155,7 @@ def test_custom_generation_uses_configured_litellm_endpoint(monkeypatch):
         def json(self):
             return {"choices": [{"message": {"content": json.dumps({"word": "apple"})}}]}
 
-    def fake_request(payload, api_key, base_url, retries=3, provider="openai"):
+    def fake_request(payload, api_key, base_url, retries=3, provider="openai", notify=None):
         captured.update({"payload": payload, "api_key": api_key, "base_url": base_url, "provider": provider})
         return Response()
 
@@ -172,7 +174,7 @@ def test_custom_generation_uses_configured_litellm_endpoint(monkeypatch):
     assert captured["api_key"] == "litellm-key"
     assert captured["base_url"] == "http://your-litellm-server:4000/v1"
     assert captured["payload"]["model"] == "qwen36-fast"
-    assert captured["payload"]["max_tokens"] == 15000
+    assert captured["payload"]["max_tokens"] == 4096
     assert captured["payload"]["extra_body"] == {"chat_template_kwargs": {"enable_thinking": False}}
     assert "response_format" not in captured["payload"]
 
@@ -677,9 +679,8 @@ def test_on_add_note_populates_english_and_loads(monkeypatch):
         "etymology": "Old English",
         "synonyms": ["fruit"],
         "antonyms": ["vegetable"],
-        "realWorldExamples": ["apple pie"],
     }
-    monkeypatch.setattr(addon, "generate_vocab_note", lambda word: json.dumps(payload))
+    monkeypatch.setattr(addon, "generate_vocab_note", lambda word, notify=None: json.dumps(payload))
     monkeypatch.setattr(addon, "generate_speech", lambda word: None)
 
     addon.on_add_note(editor)
@@ -701,9 +702,8 @@ def test_on_add_note_populates_japanese_and_loads(monkeypatch):
         "partsOfSpeech": "i-adjective",
         "grammaticalRules": {"adjectives": {"NegativeForm": "近くない"}},
         "sound": "https://forvo.com/word/近い/#ja",
-        "exampleSentences": [{"sentence": "駅に近いです。", "translation": "離車站很近。"}],
     }
-    monkeypatch.setattr(addon, "generate_vocab_note", lambda word: json.dumps(payload))
+    monkeypatch.setattr(addon, "generate_vocab_note", lambda word, notify=None: json.dumps(payload))
     monkeypatch.setattr(addon, "generate_speech", lambda word: None)
 
     addon.on_add_note(editor)
@@ -751,7 +751,7 @@ def test_on_add_note_handles_empty_word(monkeypatch):
 def test_on_add_note_reports_population_error(monkeypatch):
     messages = []
     editor = DummyEditor("apple")
-    monkeypatch.setattr(addon, "generate_vocab_note", lambda word: json.dumps({"word": "apple"}))
+    monkeypatch.setattr(addon, "generate_vocab_note", lambda word, notify=None: json.dumps({"word": "apple"}))
     monkeypatch.setattr(addon, "populate_english_note", lambda editor, note_data: (_ for _ in ()).throw(RuntimeError("boom")))
     monkeypatch.setattr(addon, "showInfo", messages.append)
 
@@ -828,10 +828,16 @@ def test_prompt_for_vocab_applies_generation_mode(monkeypatch):
 
     monkeypatch.setitem(addon.config, "generation_mode", "japanese")
 
-    japanese_prompt = addon.prompt_for_vocab("apple")
+    japanese_prompt = addon.prompt_for_vocab("近い")
 
     assert "You are a Japanese dictionary engine" in japanese_prompt
     assert "Generation mode: Japanese" in japanese_prompt
+
+    # English words must not get the Japanese schema; it produces empty cards.
+    english_prompt = addon.prompt_for_vocab("apple")
+
+    assert "You are a bilingual dictionary engine" in english_prompt
+    assert "Generation mode: Standard" in english_prompt
 
 
 def test_run_api_health_check_validates_parsed_json(monkeypatch):
@@ -906,3 +912,144 @@ def test_redact_payload_removes_secret_values():
     assert payload["Authorization"] == "[redacted]"
     assert payload["nested"]["openai_api_key"] == "[redacted]"
     assert payload["safe"] == "value"
+
+
+README_STYLE_FIELDS = {
+    "vocabulary": "Vocabulary",
+    "detail definition": "Detail definition",
+    "Pronunciations": "Pronunciations",
+    "Sound": "Sound",
+    "Etymology, Synonyms and Antonyms": "Etymology, Synonyms, and Antonyms",
+    "Real-world examples": "Real-world examples",
+}
+
+
+def test_format_examples_bolds_whole_words_only():
+    html = addon.format_examples_html("at", ["The cat sat at the mat"])
+
+    assert html.count("<strong>") == 1
+    assert "<strong>at</strong> the mat" in html
+    assert "c<strong>at</strong>" not in html
+
+
+def test_html_text_escapes_and_falls_back_on_blank():
+    assert addon.html_text("", "N/A") == "N/A"
+    assert addon.html_text("   ", "N/A") == "N/A"
+    assert addon.html_text("<b>&</b>") == "&lt;b&gt;&amp;&lt;/b&gt;"
+
+
+def test_clean_vocab_input_strips_editor_html():
+    assert addon.clean_vocab_input("<div>apple</div>") == "apple"
+    assert addon.clean_vocab_input("a &amp; b&nbsp;") == "a & b"
+    assert addon.clean_vocab_input("") == ""
+
+
+def test_resolve_note_fields_matches_readme_field_names():
+    note = DummyNote(["apple"])
+    for actual in README_STYLE_FIELDS.values():
+        note[actual] = ""
+
+    mapping = addon.resolve_note_fields(note)
+
+    assert mapping["vocabulary"] == "Vocabulary"
+    assert mapping["Etymology, Synonyms and Antonyms"] == "Etymology, Synonyms, and Antonyms"
+
+
+def test_populate_english_note_writes_readme_style_field_names(monkeypatch):
+    monkeypatch.setattr(addon, "generate_speech", lambda word: None)
+    editor = DummyEditor("apple")
+    for actual in README_STYLE_FIELDS.values():
+        editor.note[actual] = ""
+
+    addon.populate_english_note(editor, {"word": "apple"})
+
+    assert editor.note["Vocabulary"] == "<h2>apple</h2>"
+    assert editor.note["Sound"].startswith("<h3>Sound:</h3>")
+    assert "vocabulary" not in editor.note
+
+
+def test_on_add_note_reports_missing_note_fields_before_any_api_call(monkeypatch):
+    messages = []
+    editor = DummyEditor("apple")
+    editor.note["Vocabulary"] = ""  # incomplete note type
+
+    def fail(*args, **kwargs):
+        raise AssertionError("LLM must not be called when fields are missing")
+
+    monkeypatch.setattr(addon, "generate_vocab_note", fail)
+    monkeypatch.setattr(addon, "showInfo", messages.append)
+
+    addon.on_add_note(editor)
+
+    assert any("missing fields" in message for message in messages)
+    assert editor.loaded is False
+
+
+def test_llm_api_request_does_not_retry_client_errors(monkeypatch):
+    calls = []
+
+    class Response:
+        status_code = 401
+        text = "unauthorized"
+
+        def raise_for_status(self):
+            raise addon.requests.exceptions.HTTPError("unauthorized")
+
+        def json(self):
+            return {"error": "invalid api key"}
+
+    def fake_post(*args, **kwargs):
+        calls.append(1)
+        return Response()
+
+    messages = []
+    monkeypatch.setattr(addon.requests, "post", fake_post)
+    monkeypatch.setattr(addon, "showInfo", messages.append)
+
+    assert addon.llm_api_request({}, "bad-key", "https://api.openai.com/v1", retries=3) is None
+
+    assert len(calls) == 1
+    assert "LLM HTTP error" in messages[0]
+
+
+def test_custom_speech_respects_configured_full_list_voice(monkeypatch):
+    monkeypatch.setitem(addon.config, "speech_provider", "custom")
+    monkeypatch.setitem(addon.config, "speech_api_key", "speaches-key")
+    monkeypatch.setitem(addon.config, "speech_voice", "af_heart")
+
+    _provider, _api_key, _url, _model, voice, _fmt = addon.speech_settings("apple")
+
+    assert voice == "af_heart"
+    assert voice in addon.KOKORO_AMERICAN_VOICES
+
+
+def test_generate_speech_reuses_prewarmed_audio(monkeypatch, tmp_path):
+    calls = []
+    added_files = []
+    monkeypatch.setitem(addon.config, "speech_provider", "openai")
+    monkeypatch.setitem(addon.config, "speech_api_key", "your-speech-key")
+    monkeypatch.setitem(addon.config, "openai_api_key", "test-key")
+    monkeypatch.setattr(addon, "__file__", str(tmp_path / "__init__.py"))
+    monkeypatch.setattr(
+        addon,
+        "mw",
+        SimpleNamespace(col=SimpleNamespace(media=SimpleNamespace(addFile=lambda path: added_files.append(path.name) or "audio.mp3"))),
+    )
+
+    class Response:
+        content = b"mp3"
+
+        def raise_for_status(self):
+            return None
+
+    def fake_post(*args, **kwargs):
+        calls.append(1)
+        return Response()
+
+    monkeypatch.setattr(addon.requests, "post", fake_post)
+
+    assert addon.prewarm_speech("apple") is not None
+    assert addon.generate_speech("apple") == "audio.mp3"
+
+    assert len(calls) == 1  # TTS fetched once; generate_speech reused the cache
+    assert added_files and added_files[0].endswith(".mp3")

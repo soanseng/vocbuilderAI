@@ -42,7 +42,8 @@ def process_response(response: str, notify=None) -> dict:
     try:
         parsed = json.loads(cleaned_response)
     except json.JSONDecodeError as error:
-        notify(f"Failed to parse note data: {error}\nContent: {cleaned_response}")
+        preview = cleaned_response if len(cleaned_response) <= 500 else cleaned_response[:500] + "\n…(truncated)"
+        notify(f"Failed to parse note data: {error}\nContent: {preview}")
         return {}
     return parsed if isinstance(parsed, dict) else {}
 

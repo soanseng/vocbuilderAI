@@ -10,7 +10,7 @@ CONFIG_DEFAULTS = {
     "default_tag": "vocabulary::wordoftheday",
     "note_type": "vocbuilderAI",
     "model": "",
-    "max_tokens": 15000,
+    "max_tokens": 4096,
     "temperature": 0.5,
     "speech_provider": "openai",
     "speech_api_key": "your-speech-key",
