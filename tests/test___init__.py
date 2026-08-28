@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import pathlib
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -1053,3 +1054,268 @@ def test_generate_speech_reuses_prewarmed_audio(monkeypatch, tmp_path):
 
     assert len(calls) == 1  # TTS fetched once; generate_speech reused the cache
     assert added_files and added_files[0].endswith(".mp3")
+
+
+def test_japanese_grammar_prompt_contract():
+    assert "Return exactly one valid JSON object" in prompts.JPG_PROMPT
+    assert '"grammarPoints"' in prompts.JPG_PROMPT
+    assert '"reading"' in prompts.JPG_PROMPT and '"translation"' in prompts.JPG_PROMPT
+    assert "Traditional Chinese" in prompts.JPG_PROMPT
+
+    styled = addon.with_generation_mode(prompts.JPG_PROMPT, "concise")
+    assert "Generation mode: Concise" in styled
+
+
+def test_normalize_japanese_grammar_data_maps_variants():
+    normalized = addon.normalize_japanese_grammar_data(
+        {
+            "sentence": "行かなければならない。",
+            "translationInZhTw": "必須去。",
+            "grammarPoints": [
+                {
+                    "fragment": "なければならない",
+                    "name": "〜なければならない",
+                    "explanation": "表示義務",
+                    "formation": "動詞ない形 + なければならない",
+                    "note": "口語可用「なきゃ」",
+                },
+                "を",
+            ],
+            "relatedGrammar": ["〜なきゃ", 42],
+            "exampleSentences": [
+                {"sentence": "宿題をしなきゃ。", "furigana": "しゅくだいをしなきゃ。", "translation": "必須寫作業。"}
+            ],
+        }
+    )
+
+    assert normalized["sentence"] == "行かなければならない。"
+    assert normalized["translation"] == "必須去。"
+    first_point = normalized["grammarPoints"][0]
+    assert first_point == {
+        "expression": "なければならない",
+        "grammarName": "〜なければならない",
+        "meaning": "表示義務",
+        "structure": "動詞ない形 + なければならない",
+        "notes": "口語可用「なきゃ」",
+    }
+    assert normalized["grammarPoints"][1] == {
+        "expression": "を",
+        "grammarName": "",
+        "meaning": "",
+        "structure": "",
+        "notes": "",
+    }
+    assert normalized["relatedGrammar"] == ["〜なきゃ"]
+    example = normalized["exampleSentences"][0]
+    assert example["sentence"] == "宿題をしなきゃ。"
+    assert example["reading"] == "しゅくだいをしなきゃ。"
+    assert example["translation"] == "必須寫作業。"
+
+
+def test_format_grammar_points_renders_escapes_and_variants():
+    html = addon.format_grammarPoints_html(
+        [
+            {
+                "expression": "て<span>も</span>",
+                "grammarName": "〜てもいい",
+                "meaning": "可以(許可)",
+                "structure": "動詞て形 + もいい",
+                "notes": "口語常講「てもいい?」",
+            },
+            "plain fragment",
+        ]
+    )
+
+    assert "<strong>〜てもいい</strong>" in html
+    assert "&lt;span&gt;" in html
+    assert "Structure: 動詞て形 + もいい" in html
+    assert "Meaning: 可以(許可)" in html
+    assert "Notes: 口語常講「てもいい?」" in html
+    assert "<strong>plain fragment</strong>" in html
+
+
+def test_format_grammar_points_and_related_handle_empty():
+    assert "No grammar points found." in addon.format_grammarPoints_html(None)
+    assert addon.format_relatedGrammar_html(None) == ""
+    related = addon.format_relatedGrammar_html(["〜ば", "〜ほど"])
+    assert "<li>〜ば</li>" in related and "<li>〜ほど</li>" in related
+
+
+def test_populate_japanese_grammar_note_writes_all_fields(monkeypatch):
+    monkeypatch.setattr(addon, "generate_speech", lambda text: "bunpo.wav")
+    editor = DummyEditor("毎日単語を覚えなければならない。")
+    note_data = {
+        "sentence": "毎日単語を覚えなければならない。",
+        "reading": "まいにちたんごをおぼえなければならない。",
+        "translation": "每天必須背單字。",
+        "grammarPoints": [
+            {
+                "expression": "なければならない",
+                "grammarName": "〜なければならない",
+                "meaning": "必須、非得不可",
+                "structure": "動詞ない形 + なければならない",
+                "notes": "正式的義務表達",
+            }
+        ],
+        "relatedGrammar": ["〜なきゃ", "〜なくてはいけない"],
+        "exampleSentences": [
+            {"sentence": "薬を飲まなければならない。", "reading": "くすりをのまなければならない。", "translation": "必須吃藥。"}
+        ],
+    }
+
+    addon.populate_japanese_grammar_note(editor, note_data)
+
+    assert "<h2>毎日単語を覚えなければならない。</h2>" in editor.note["vocabulary"]
+    assert "まいにちたんごをおぼえなければならない。" in editor.note["Pronunciations"]
+    assert "[sound:bunpo.wav]" in editor.note["Sound"]
+    assert "每天必須背單字。" in editor.note["detail definition"]
+    assert "Grammar Points:" in editor.note["detail definition"]
+    assert "〜なければならない" in editor.note["detail definition"]
+    assert "〜なきゃ" in editor.note["Etymology, Synonyms and Antonyms"]
+    assert "〜なくてはいけない" in editor.note["Etymology, Synonyms and Antonyms"]
+    assert "必須吃藥。" in editor.note["Real-world examples"]
+
+
+def test_generate_grammar_note_uses_japanese_prompt_and_separate_cache(monkeypatch):
+    calls = []
+
+    def fake_llm_request(payload, *args, **kwargs):
+        calls.append(payload)
+        content = '{"sentence": "x", "grammarPoints": []}'
+        return SimpleNamespace(json=lambda: {"choices": [{"message": {"content": content}}]})
+
+    monkeypatch.setattr(addon, "llm_api_request", fake_llm_request)
+
+    first = addon.generate_grammar_note("〜てもいい")
+    second = addon.generate_grammar_note("〜てもいい")
+    addon.generate_vocab_note("〜てもいい")
+
+    assert first == second
+    assert len(calls) == 2
+    assert "Japanese grammar explanation engine" in calls[0]["messages"][0]["content"]
+    assert calls[0]["messages"][1]["content"] == "〜てもいい"
+
+
+def test_on_add_grammar_note_populates_and_loads(monkeypatch):
+    editor = DummyEditor("手伝ってもらえますか。")
+    note_data = {
+        "sentence": "手伝ってもらえますか。",
+        "reading": "てつだってもらえますか。",
+        "translation": "能請你幫忙嗎?",
+        "grammarPoints": [
+            {
+                "expression": "てもらえる",
+                "grammarName": "〜てもらえる",
+                "meaning": "請別人為我做…",
+                "structure": "動詞て形 + もらえる",
+                "notes": "授受表現",
+            }
+        ],
+        "relatedGrammar": [],
+        "exampleSentences": [],
+    }
+    monkeypatch.setattr(addon, "generate_grammar_note_data", lambda text, notify=None: note_data)
+    monkeypatch.setattr(addon, "prewarm_speech", lambda text, notify=None: None)
+    monkeypatch.setattr(addon, "generate_speech", lambda text: None)
+
+    addon.on_add_grammar_note(editor)
+
+    assert editor.loaded is True
+    assert "Grammar Points:" in editor.note["detail definition"]
+
+
+def test_on_add_grammar_note_rejects_non_japanese_input(monkeypatch):
+    messages = []
+    monkeypatch.setattr(addon, "showInfo", messages.append)
+    editor = DummyEditor("an apple a day")
+
+    addon.on_add_grammar_note(editor)
+
+    assert messages == ["Grammar explanation expects a Japanese sentence or pattern."]
+    assert len(editor.note) == 0
+
+
+def test_on_add_grammar_note_reports_missing_fields_before_api_call(monkeypatch):
+    messages = []
+    monkeypatch.setattr(addon, "showInfo", messages.append)
+
+    class IncompleteNote(dict):
+        fields = ["行かなければならない。"]
+
+        def keys(self):
+            return ["vocabulary"]
+
+    class IncompleteEditor:
+        def __init__(self):
+            self.note = IncompleteNote()
+            self.loaded = False
+
+        def loadNote(self):
+            self.loaded = True
+
+    editor = IncompleteEditor()
+
+    addon.on_add_grammar_note(editor)
+
+    assert messages and "missing fields that VocBuilderAI writes" in messages[0]
+    assert editor.loaded is False
+
+
+def test_format_examples_renders_dict_translations_and_keeps_strings():
+    html = addon.format_examples_html(
+        "apple",
+        [
+            {"sentence": "I ate an apple.", "translationInZhTw": "我吃了一顆蘋果。"},
+            {"sentence": "<b>apple</b> pie", "translation": "&特殊"},
+            "Plain apple string.",
+        ],
+    )
+
+    assert "我吃了一顆蘋果。" in html
+    assert "&lt;b&gt;<strong>apple</strong>&lt;/b&gt;" in html
+    assert "&amp;特殊" in html
+    assert "Plain <strong>apple</strong> string." in html
+    assert html.count("<li>") == 3
+
+
+def test_normalize_english_examples_maps_translations():
+    normalized = addon.normalize_english_note_data(
+        {
+            "realWorldExamples": [
+                {"sentence": "I ate an apple.", "translation": "我吃了一顆蘋果。"},
+                "Bare apple string.",
+            ]
+        }
+    )
+    examples = normalized["realWorldExamples"]
+    assert examples[0] == {"sentence": "I ate an apple.", "reading": "", "translation": "我吃了一顆蘋果。"}
+    assert examples[1] == {"sentence": "Bare apple string.", "reading": "", "translation": ""}
+
+
+def test_icon_file_degrades_to_empty_on_filesystem_failure(monkeypatch):
+    def raise_oserror(*args, **kwargs):
+        raise OSError("TMPDIR is read-only")
+
+    monkeypatch.setattr(pathlib.Path, "mkdir", raise_oserror)
+    assert addon._icon_file("probe.svg", "<svg/>") == ""
+
+    monkeypatch.setattr(pathlib.Path, "mkdir", lambda *a, **k: None)
+    monkeypatch.setattr(pathlib.Path, "write_text", raise_oserror)
+    assert addon._icon_file("probe.svg", "<svg/>") == ""
+
+
+def test_module_import_survives_icon_write_failure(monkeypatch, tmp_path):
+    def raise_oserror(self, *args, **kwargs):
+        raise OSError("TMPDIR gone")
+
+    monkeypatch.setattr(pathlib.Path, "mkdir", raise_oserror)
+
+    spec = importlib.util.spec_from_file_location(
+        "vbai_import_probe", Path(__file__).resolve().parents[1] / "__init__.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+
+    spec.loader.exec_module(module)  # must not raise
+
+    assert module.VOCAI_BUTTON_ICON == ""
+    assert module.GRAMMAR_BUTTON_ICON == ""

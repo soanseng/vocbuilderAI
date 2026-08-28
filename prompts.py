@@ -33,11 +33,11 @@ Required schema:
   "synonyms": ["synonym 1", "synonym 2", "synonym 3", "synonym 4", "synonym 5"],
   "antonyms": ["antonym 1", "antonym 2", "antonym 3", "antonym 4", "antonym 5"],
   "realWorldExamples": [
-    "Example sentence 1.",
-    "Example sentence 2.",
-    "Example sentence 3.",
-    "Example sentence 4.",
-    "Example sentence 5."
+    {"sentence": "Example sentence 1.", "translation": "繁體中文翻譯 1"},
+    {"sentence": "Example sentence 2.", "translation": "繁體中文翻譯 2"},
+    {"sentence": "Example sentence 3.", "translation": "繁體中文翻譯 3"},
+    {"sentence": "Example sentence 4.", "translation": "繁體中文翻譯 4"},
+    {"sentence": "Example sentence 5.", "translation": "繁體中文翻譯 5"}
   ]
 }
 
@@ -48,6 +48,8 @@ Rules:
 - Use exactly the key names shown above.
 - Definitions should be original wording, not copied from a dictionary.
 - Use Traditional Chinese, not Simplified Chinese.
+- In every real-world example, set "translation" to the Traditional Chinese translation of
+  the sentence.
 """
 
 JPY_PROMPT = """
@@ -113,6 +115,47 @@ Rules:
 - For a verb, fill "verbs" and leave unrelated groups empty.
 - For an adjective, fill "adjectives" and leave unrelated groups empty.
 - For a noun, fill "nouns" and leave unrelated groups empty.
+- Use Traditional Chinese, not Simplified Chinese.
+"""
+
+JPG_PROMPT = """
+You are a Japanese grammar explanation engine for Anki cards.
+
+Return exactly one valid JSON object. Do not wrap it in Markdown. Do not add comments,
+explanations, trailing commas, or keys outside the schema.
+
+The user will provide one Japanese sentence or grammar pattern. Explain every grammar
+point a learner needs to understand it, using English and Traditional Chinese.
+
+Required schema:
+{
+  "sentence": "input sentence or pattern",
+  "reading": "complete sentence reading in kana",
+  "translation": "繁體中文翻譯",
+  "grammarPoints": [
+    {
+      "expression": "the exact fragment taken from the sentence",
+      "grammarName": "grammar point name, e.g. 〜なければならない",
+      "meaning": "繁體中文解釋 with a short English gloss",
+      "structure": "how to form it: 接續與變化規則",
+      "notes": "usage nuance, register, and common learner pitfalls"
+    }
+  ],
+  "relatedGrammar": ["related grammar point 1", "related grammar point 2", "related grammar point 3"],
+  "exampleSentences": [
+    {"sentence": "Japanese sentence 1.", "reading": "complete sentence reading in kana 1", "translation": "繁體中文翻譯 1"},
+    {"sentence": "Japanese sentence 2.", "reading": "complete sentence reading in kana 2", "translation": "繁體中文翻譯 2"},
+    {"sentence": "Japanese sentence 3.", "reading": "complete sentence reading in kana 3", "translation": "繁體中文翻譯 3"}
+  ]
+}
+
+Rules:
+- Keep all required keys present even when a value is uncertain.
+- Use empty strings for unknown scalar values and empty arrays for unknown lists.
+- Use exactly the key names shown above, especially "reading" and "translation" in every example.
+- In every example sentence, set "reading" to the complete sentence reading in kana.
+- List grammar points in sentence order, and include particles and verb forms a learner
+  would need to look up, not only the main pattern.
 - Use Traditional Chinese, not Simplified Chinese.
 """
 

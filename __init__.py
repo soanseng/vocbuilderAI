@@ -3,6 +3,7 @@ import html
 import random
 import re
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -19,6 +20,8 @@ try:  # pragma: no cover - exercised by Anki, not by headless tests.
         format_examples_html,
         format_explanations_html,
         format_furigana_html,
+        format_grammarPoints_html,
+        format_grammar_translation_html,
         format_grammaticalRules_html,
         format_kanji_html,
         format_meanings_html,
@@ -26,6 +29,7 @@ try:  # pragma: no cover - exercised by Anki, not by headless tests.
         format_pitchPattern_html,
         format_pronunciations_html,
         format_rule_group,
+        format_relatedGrammar_html,
         format_sound_html,
         format_synonyms_html,
         format_vocabulary_html,
@@ -35,9 +39,9 @@ try:  # pragma: no cover - exercised by Anki, not by headless tests.
     from .llm import build_chat_payload, chat_completions_url, extract_chat_content, should_retry_status
     from .llm import health_check as provider_health_check
     from .llm import llm_api_request as perform_llm_api_request
-    from .parsing import clean_response, normalize_english_note_data, normalize_japanese_note_data
+    from .parsing import clean_response, normalize_english_note_data, normalize_japanese_grammar_data, normalize_japanese_note_data
     from .parsing import process_response as parse_response
-    from .prompts import JPY_PROMPT, VOC_PROMPT, with_generation_mode
+    from .prompts import JPG_PROMPT, JPY_PROMPT, VOC_PROMPT, with_generation_mode
     from .settings import (
         CONFIG_DEFAULTS,
         GENERATION_MODES,
@@ -60,12 +64,15 @@ except ImportError:
         format_examples_html,
         format_explanations_html,
         format_furigana_html,
+        format_grammarPoints_html,
+        format_grammar_translation_html,
         format_grammaticalRules_html,
         format_kanji_html,
         format_meanings_html,
         format_partsOfSpeech_html,
         format_pitchPattern_html,
         format_pronunciations_html,
+        format_relatedGrammar_html,
         format_rule_group,
         format_sound_html,
         format_synonyms_html,
@@ -76,9 +83,9 @@ except ImportError:
     from llm import build_chat_payload, chat_completions_url, extract_chat_content, should_retry_status
     from llm import health_check as provider_health_check
     from llm import llm_api_request as perform_llm_api_request
-    from parsing import clean_response, normalize_english_note_data, normalize_japanese_note_data
+    from parsing import clean_response, normalize_english_note_data, normalize_japanese_grammar_data, normalize_japanese_note_data
     from parsing import process_response as parse_response
-    from prompts import JPY_PROMPT, VOC_PROMPT, with_generation_mode
+    from prompts import JPG_PROMPT, JPY_PROMPT, VOC_PROMPT, with_generation_mode
     from settings import (
         CONFIG_DEFAULTS,
         GENERATION_MODES,
@@ -332,20 +339,21 @@ def set_cached_generation(cache_key, content):
     GENERATION_CACHE[cache_key] = (now, content)
 
 
-def generate_vocab_note(vocab_word: str, retries=3, notify=None):
+def _generate_llm_content(vocab_word, system_prompt, retries=3, notify=None, cache_namespace=None):
     notify = notify or showInfo
     provider = config.get("provider", "openai")
     provider_defaults = resolve_provider_defaults(config)
     model = (config.get("model") or "").strip() or provider_defaults["model"]
     api_key = config.get(provider_defaults["api_key_config"])
-    cache_key = generation_cache_key(vocab_word, provider, model)
+    base_cache_key = generation_cache_key(vocab_word, provider, model)
+    cache_key = (cache_namespace,) + base_cache_key if cache_namespace else base_cache_key
     cached_content = get_cached_generation(cache_key)
     if cached_content is not None:
         return cached_content
 
     payload = build_chat_payload(
         vocab_word,
-        prompt_for_vocab(vocab_word),
+        system_prompt,
         config,
         provider_defaults,
     )
@@ -368,6 +376,29 @@ def generate_vocab_note(vocab_word: str, retries=3, notify=None):
     except (KeyError, IndexError, TypeError, ValueError) as error:
         notify(f"LLM returned an unexpected response shape:\n{error}")
         return None
+
+
+def generate_vocab_note(vocab_word: str, retries=3, notify=None):
+    return _generate_llm_content(vocab_word, prompt_for_vocab(vocab_word), retries=retries, notify=notify)
+
+
+def generate_grammar_note(grammar_input: str, retries=3, notify=None):
+    mode = config.get("generation_mode", "standard")
+    grammar_prompt = with_generation_mode(JPG_PROMPT, mode)
+    return _generate_llm_content(
+        grammar_input,
+        grammar_prompt,
+        retries=retries,
+        notify=notify,
+        cache_namespace="japanese-grammar",
+    )
+
+
+def generate_grammar_note_data(grammar_input, notify=None):
+    response = generate_grammar_note(grammar_input, notify=notify)
+    if response is None:
+        return None
+    return parse_response(response, notify=notify) or None
 
 
 def prompt_for_vocab(vocab_word):
@@ -632,6 +663,30 @@ def populate_japanese_note(editor, note_data):
     note[field_map["Real-world examples"]] = format_exampleSentences_html(note_data.get("exampleSentences"))
 
 
+def populate_japanese_grammar_note(editor, note_data):
+    note_data = normalize_japanese_grammar_data(note_data)
+    field_map = resolve_note_fields(editor.note)
+    sentence = note_data.get("sentence") or editor.note.fields[0]
+    speech_text = (note_data.get("reading") or "").strip() or sentence
+    sound = generate_speech(speech_text)
+
+    note = editor.note
+    note[field_map["vocabulary"]] = format_vocabulary_html(sentence)
+    note[field_map["Pronunciations"]] = (
+        format_pronunciations_html(note_data.get("reading")) if note_data.get("reading") else ""
+    )
+    note[field_map["Sound"]] = sound_reference(sound)
+    detail_sections = [
+        format_grammar_translation_html(note_data.get("translation")),
+        format_grammarPoints_html(note_data.get("grammarPoints")),
+    ]
+    note[field_map["detail definition"]] = "<br>".join(section for section in detail_sections if section)
+    note[field_map["Etymology, Synonyms and Antonyms"]] = format_relatedGrammar_html(
+        note_data.get("relatedGrammar")
+    )
+    note[field_map["Real-world examples"]] = format_exampleSentences_html(note_data.get("exampleSentences"))
+
+
 def generate_note_data(vocab_word, notify=None):
     response = generate_vocab_note(vocab_word, notify=notify)
     if response is None:
@@ -687,6 +742,55 @@ def on_add_note(editor: Editor):
         finish(work())
 
 
+def on_add_grammar_note(editor: Editor):
+    grammar_input = clean_vocab_input(editor.note.fields[0])
+    if not grammar_input:
+        showInfo("No Japanese sentence entered. Please enter a sentence in the 'vocabulary' field.")
+        return
+    if not is_japanese_vocab(grammar_input):
+        showInfo("Grammar explanation expects a Japanese sentence or pattern.")
+        return
+    try:
+        resolve_note_fields(editor.note)
+    except MissingNoteFieldsError as error:
+        showInfo(str(error))
+        return
+
+    def work():
+        messages = []
+        note_data = generate_grammar_note_data(grammar_input, notify=messages.append)
+        if note_data is not None:
+            reading = (note_data.get("reading") or "").strip()
+            prewarm_speech(reading or grammar_input, notify=messages.append)
+        return note_data, messages
+
+    def finish(result):
+        note_data, messages = result
+        for message in messages:
+            showInfo(message)
+        if note_data is None:
+            return
+        try:
+            populate_japanese_grammar_note(editor, note_data)
+            editor.loadNote()
+        except Exception as error:
+            showInfo(f"Error on grammar note: {error}")
+
+    taskman = getattr(mw, "taskman", None) if ANKI_AVAILABLE else None
+    if taskman is not None:
+        tooltip("VocBuilderAI: explaining grammar…")
+
+        def on_done(future):
+            try:
+                finish(future.result())
+            except Exception as error:
+                showInfo(f"Error on grammar note: {error}")
+
+        taskman.run_in_background(work, on_done, uses_collection=False)
+    else:
+        finish(work())
+
+
 def add_note_to_deck(deck_name, tag_name, note_data):  # pragma: no cover - requires a live Anki collection.
     if not ANKI_AVAILABLE:
         raise RuntimeError("Anki is required to add notes to a deck.")
@@ -719,16 +823,64 @@ def add_note_to_deck(deck_name, tag_name, note_data):  # pragma: no cover - requ
     mw.col.addNote(note)
 
 
+def _icon_file(name, svg):
+    """Write an inline SVG to a temp file and return its absolute path.
+
+    Anki's editor converts absolute icon paths to data URIs itself
+    (aqt.editor.NewEditor._addButton); passing our own data URI would be
+    misread as a bundled image name and render broken.
+
+    Icons are decoration only: any filesystem failure returns "" so module
+    import cannot break, and callers fall back to text labels.
+    """
+    try:
+        icon_dir = Path(tempfile.gettempdir()) / "vocbuilder_ai_icons"
+        icon_dir.mkdir(parents=True, exist_ok=True)
+        path = icon_dir / name
+        path.write_text(svg, encoding="utf-8")
+        return str(path)
+    except OSError:
+        return ""
+
+
+VOCAI_BUTTON_ICON = _icon_file(
+    "vocai.svg",
+    '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22">'
+    '<rect x="1" y="1" width="20" height="20" rx="5" fill="#3566a5"/>'
+    '<text x="11" y="15" font-family="sans-serif" font-size="10" font-weight="bold" '
+    'fill="#fff" text-anchor="middle">A字</text></svg>',
+)
+
+
+GRAMMAR_BUTTON_ICON = _icon_file(
+    "grammar.svg",
+    '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22">'
+    '<rect x="1" y="1" width="20" height="20" rx="5" fill="#2e8b57"/>'
+    '<text x="11" y="14.5" font-family="sans-serif" font-size="9" font-weight="bold" '
+    'fill="#fff" text-anchor="middle">文法</text></svg>',
+)
+
+
 def add_action_button(buttons, editor: Editor):  # pragma: no cover - requires Anki editor UI.
     button = editor.addButton(
-        icon=None,
-        label="VocAI",
+        icon=VOCAI_BUTTON_ICON,
+        label="VocAI" if not VOCAI_BUTTON_ICON else "",
         cmd="generate_vocab_content",
         func=lambda _, e=editor: on_add_note(e),
-        tip="Generate vocabulary content",
+        tip="VocBuilderAI: Generate vocabulary content (VocAI)",
         keys=None,
     )
     buttons.append(button)
+
+    grammar_button = editor.addButton(
+        icon=GRAMMAR_BUTTON_ICON,
+        label="文法" if not GRAMMAR_BUTTON_ICON else "",
+        cmd="generate_japanese_grammar",
+        func=lambda _, e=editor: on_add_grammar_note(e),
+        tip="VocBuilderAI: Explain Japanese grammar of the entered sentence (文法)",
+        keys=None,
+    )
+    buttons.append(grammar_button)
     return buttons
 
 

@@ -126,6 +126,8 @@ If a check fails, change the API key, provider, or model before creating cards.
 5. Review the generated fields.
 6. Click `Add` to save the note.
 
+To explain the grammar of a whole Japanese sentence, type the sentence in the first field and click the `文法` button instead. It fills the same `vocbuilderAI` fields with the sentence, kana reading, a Traditional Chinese translation, point-by-point grammar explanations, related patterns, and example sentences.
+
 For Japanese vocabulary, use the `Japanese` generation mode if you want more consistent readings, grammar, and Traditional Chinese translations.
 
 ![screenshot1](media/screenshot-1.png)
@@ -255,6 +257,8 @@ Model 欄位留空時，會使用 provider 的預設模型。
 6. 點 `Add` 儲存卡片。
 
 如果主要產生日文卡片，建議使用 `Japanese` 生成模式，讀音、文法和繁中翻譯會比較穩定。
+
+若要解釋整個日語句子的文法，在第一個欄位輸入日文句子後改點 `文法` 按鈕。它會以同樣的 `vocbuilderAI` 欄位填入句子、假名讀音、繁中翻譯、逐項文法解析、相關句型與例句。
 
 ### 疑難排解
 - `Unsupported parameter: max_tokens`：請更新到最新版 add-on。OpenAI 現在使用 `max_completion_tokens`。

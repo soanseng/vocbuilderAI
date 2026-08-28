@@ -4,6 +4,6 @@
     "description": "An add-on to enhance vocabulary learning using OpenAI's API.",
     "keywords": ["vocabulary", "learning", "AI"],
     "author": "soanseng",
-    "version": "1.2",
+    "version": "1.3",
     "min_point_version": 41
 }

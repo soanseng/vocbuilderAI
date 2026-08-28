@@ -59,20 +59,40 @@ def normalize_english_note_data(note_data):
         "etymology": note_data.get("etymology") or "",
         "synonyms": as_list(note_data.get("synonyms")),
         "antonyms": as_list(note_data.get("antonyms")),
-        "realWorldExamples": as_list(note_data.get("realWorldExamples")),
+        "realWorldExamples": _normalize_japanese_examples(note_data.get("realWorldExamples")),
     }
 
 
 def normalize_japanese_note_data(note_data):
     note_data = as_dict(note_data)
     explanations = as_dict(note_data.get("explanations"))
-    example_sentences = []
-    for example in as_list(note_data.get("exampleSentences")):
+    example_sentences = _normalize_japanese_examples(note_data.get("exampleSentences"))
+
+    return {
+        "vocabulary": note_data.get("vocabulary") or note_data.get("word") or "",
+        "kanji": note_data.get("kanji") or note_data.get("vocabulary") or note_data.get("word") or "",
+        "furigana": note_data.get("furigana") or "",
+        "pitchPattern": note_data.get("pitchPattern") or "",
+        "pronunciations": note_data.get("pronunciations") or "",
+        "explanations": {
+            "en-US": explanations.get("en-US") or explanations.get("english") or "",
+            "zh-TW": explanations.get("zh-TW") or explanations.get("traditionalChinese") or "",
+        },
+        "partsOfSpeech": note_data.get("partsOfSpeech") or "",
+        "grammaticalRules": as_dict(note_data.get("grammaticalRules")),
+        "sound": note_data.get("sound") or "",
+        "exampleSentences": example_sentences,
+    }
+
+
+def _normalize_japanese_examples(raw_examples):
+    examples = []
+    for example in as_list(raw_examples):
         if isinstance(example, str):
-            example_sentences.append({"sentence": example, "reading": "", "translation": ""})
+            examples.append({"sentence": example, "reading": "", "translation": ""})
             continue
         example = as_dict(example)
-        example_sentences.append(
+        examples.append(
             {
                 "sentence": example.get("sentence", ""),
                 "reading": (
@@ -90,19 +110,40 @@ def normalize_japanese_note_data(note_data):
                 ),
             }
         )
+    return examples
 
+
+def normalize_japanese_grammar_data(grammar_data):
+    grammar_data = as_dict(grammar_data)
+    grammar_points = []
+    for point in as_list(grammar_data.get("grammarPoints")):
+        if isinstance(point, str):
+            grammar_points.append(
+                {"expression": point, "grammarName": "", "meaning": "", "structure": "", "notes": ""}
+            )
+            continue
+        point = as_dict(point)
+        grammar_points.append(
+            {
+                "expression": point.get("expression") or point.get("fragment") or "",
+                "grammarName": point.get("grammarName") or point.get("name") or point.get("pattern") or "",
+                "meaning": point.get("meaning") or point.get("explanation") or "",
+                "structure": point.get("structure") or point.get("formation") or "",
+                "notes": point.get("notes") or point.get("note") or "",
+            }
+        )
+
+    related_grammar = [item for item in as_list(grammar_data.get("relatedGrammar")) if isinstance(item, str)]
     return {
-        "vocabulary": note_data.get("vocabulary") or note_data.get("word") or "",
-        "kanji": note_data.get("kanji") or note_data.get("vocabulary") or note_data.get("word") or "",
-        "furigana": note_data.get("furigana") or "",
-        "pitchPattern": note_data.get("pitchPattern") or "",
-        "pronunciations": note_data.get("pronunciations") or "",
-        "explanations": {
-            "en-US": explanations.get("en-US") or explanations.get("english") or "",
-            "zh-TW": explanations.get("zh-TW") or explanations.get("traditionalChinese") or "",
-        },
-        "partsOfSpeech": note_data.get("partsOfSpeech") or "",
-        "grammaticalRules": as_dict(note_data.get("grammaticalRules")),
-        "sound": note_data.get("sound") or "",
-        "exampleSentences": example_sentences,
+        "sentence": grammar_data.get("sentence") or grammar_data.get("vocabulary") or "",
+        "reading": grammar_data.get("reading") or "",
+        "translation": (
+            grammar_data.get("translation")
+            or grammar_data.get("translation in zh-tw")
+            or grammar_data.get("translationInZhTw")
+            or ""
+        ),
+        "grammarPoints": grammar_points,
+        "relatedGrammar": related_grammar,
+        "exampleSentences": _normalize_japanese_examples(grammar_data.get("exampleSentences")),
     }

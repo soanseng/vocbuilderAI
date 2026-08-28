@@ -106,9 +106,24 @@ def format_examples_html(vocab_word, examples):
     bold_word = html.escape(str(vocab_word), quote=True)
     bold_pattern = re.compile(rf"\b{re.escape(bold_word)}\b", re.IGNORECASE)
     for example in as_list(examples):
-        example = html_text(example)
+        if isinstance(example, dict):
+            example = as_dict(example)
+            sentence = example.get("sentence") or example.get("exampleSentence") or ""
+            translation = (
+                example.get("translation")
+                or example.get("translationInZhTw")
+                or example.get("translation in zh-tw")
+                or ""
+            )
+        else:
+            sentence = example
+            translation = ""
+        example = html_text(sentence)
         example = bold_pattern.sub(f"<strong>{bold_word}</strong>", example)
-        html_content += f"<li>{example}</li>"
+        html_content += f"<li>{example}"
+        if translation:
+            html_content += f"<br><span><em>{html_text(translation)}</em></span>"
+        html_content += "</li>"
     html_content += "</ul>"
     return html_content
 
@@ -226,4 +241,46 @@ def format_exampleSentences_html(exampleSentences):
             html_content += f" - {html_text(translation)}"
         html_content += "</li>"
     html_content += "</ol>"
+    return html_content
+
+
+def format_grammar_translation_html(translation):
+    if not translation:
+        return ""
+    return f"<h3>Translation:</h3><p>{html_text(translation)}</p>"
+
+
+def format_grammarPoints_html(grammarPoints):
+    points = as_list(grammarPoints)
+    if not points:
+        return "<h3>Grammar Points:</h3><p>No grammar points found.</p>"
+    html_content = "<h3>Grammar Points:</h3><ol>"
+    for point in points:
+        if isinstance(point, str):
+            html_content += f"<li><strong>{html_text(point)}</strong></li>"
+            continue
+        point = as_dict(point)
+        name = point.get("grammarName") or point.get("expression")
+        html_content += f"<li><strong>{html_text(name)}</strong>"
+        if point.get("grammarName") and point.get("expression"):
+            html_content += f"<br><span><em>{html_text(point.get('expression'))}</em></span>"
+        if point.get("structure"):
+            html_content += f"<br>Structure: {html_text(point.get('structure'))}"
+        if point.get("meaning"):
+            html_content += f"<br>Meaning: {html_text(point.get('meaning'))}"
+        if point.get("notes"):
+            html_content += f"<br>Notes: {html_text(point.get('notes'))}"
+        html_content += "</li>"
+    html_content += "</ol>"
+    return html_content
+
+
+def format_relatedGrammar_html(relatedGrammar):
+    items = [item for item in as_list(relatedGrammar) if isinstance(item, str)]
+    if not items:
+        return ""
+    html_content = "<h3>Related Grammar:</h3><ul>"
+    for item in items:
+        html_content += f"<li>{html_text(item)}</li>"
+    html_content += "</ul>"
     return html_content
