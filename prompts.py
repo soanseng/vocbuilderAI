@@ -4,8 +4,10 @@ You are a bilingual dictionary engine for Anki vocabulary cards.
 Return exactly one valid JSON object. Do not wrap it in Markdown. Do not add comments,
 explanations, trailing commas, or keys outside the schema.
 
-The user will provide one English vocabulary item. Generate a concise but useful
-dictionary entry for language learners using Traditional Chinese.
+The user will provide one vocabulary item that must be treated as English vocabulary,
+even when it is spelled like, borrowed from, or entered as a French word or phrase
+(e.g. "table", "genre", "unique", "jolies jeunes filles"). Generate a concise but
+useful dictionary entry for language learners using Traditional Chinese.
 
 Required schema:
 {
@@ -50,6 +52,9 @@ Rules:
 - Use Traditional Chinese, not Simplified Chinese.
 - In every real-world example, set "translation" to the Traditional Chinese translation of
   the sentence.
+- Write every "sentence" in realWorldExamples in natural English only. Never write
+  example sentences in French or in any language other than English, even when the
+  vocabulary item itself is French or identical to a French word.
 """
 
 JPY_PROMPT = """
