@@ -24,6 +24,7 @@ try:  # pragma: no cover - exercised by Anki, not by headless tests.
         format_grammar_translation_html,
         format_grammaticalRules_html,
         format_kanji_html,
+        format_math_back_html,
         format_meanings_html,
         format_partsOfSpeech_html,
         format_pitchPattern_html,
@@ -39,9 +40,9 @@ try:  # pragma: no cover - exercised by Anki, not by headless tests.
     from .llm import build_chat_payload, chat_completions_url, extract_chat_content, should_retry_status
     from .llm import health_check as provider_health_check
     from .llm import llm_api_request as perform_llm_api_request
-    from .parsing import clean_response, normalize_english_note_data, normalize_japanese_grammar_data, normalize_japanese_note_data
+    from .parsing import clean_response, normalize_english_note_data, normalize_japanese_grammar_data, normalize_japanese_note_data, normalize_math_note_data
     from .parsing import process_response as parse_response
-    from .prompts import JPG_PROMPT, JPY_PROMPT, VOC_PROMPT, with_generation_mode
+    from .prompts import JPG_PROMPT, JPY_PROMPT, MATH_PROMPT, VOC_PROMPT, with_generation_mode
     from .settings import (
         CONFIG_DEFAULTS,
         GENERATION_MODES,
@@ -68,6 +69,7 @@ except ImportError:
         format_grammar_translation_html,
         format_grammaticalRules_html,
         format_kanji_html,
+        format_math_back_html,
         format_meanings_html,
         format_partsOfSpeech_html,
         format_pitchPattern_html,
@@ -83,9 +85,9 @@ except ImportError:
     from llm import build_chat_payload, chat_completions_url, extract_chat_content, should_retry_status
     from llm import health_check as provider_health_check
     from llm import llm_api_request as perform_llm_api_request
-    from parsing import clean_response, normalize_english_note_data, normalize_japanese_grammar_data, normalize_japanese_note_data
+    from parsing import clean_response, normalize_english_note_data, normalize_japanese_grammar_data, normalize_japanese_note_data, normalize_math_note_data
     from parsing import process_response as parse_response
-    from prompts import JPG_PROMPT, JPY_PROMPT, VOC_PROMPT, with_generation_mode
+    from prompts import JPG_PROMPT, JPY_PROMPT, MATH_PROMPT, VOC_PROMPT, with_generation_mode
     from settings import (
         CONFIG_DEFAULTS,
         GENERATION_MODES,
@@ -236,6 +238,9 @@ CANONICAL_NOTE_FIELDS = [
     "Etymology, Synonyms and Antonyms",
     "Real-world examples",
 ]
+
+
+MATH_CANONICAL_NOTE_FIELDS = ["Front", "Back"]
 
 
 def clean_vocab_input(value):
@@ -396,6 +401,23 @@ def generate_grammar_note(grammar_input: str, retries=3, notify=None):
 
 def generate_grammar_note_data(grammar_input, notify=None):
     response = generate_grammar_note(grammar_input, notify=notify)
+    if response is None:
+        return None
+    return parse_response(response, notify=notify) or None
+
+
+def generate_math_note(math_input: str, retries=3, notify=None):
+    return _generate_llm_content(
+        math_input,
+        MATH_PROMPT,
+        retries=retries,
+        notify=notify,
+        cache_namespace="math",
+    )
+
+
+def generate_math_note_data(math_input, notify=None):
+    response = generate_math_note(math_input, notify=notify)
     if response is None:
         return None
     return parse_response(response, notify=notify) or None
@@ -687,6 +709,12 @@ def populate_japanese_grammar_note(editor, note_data):
     note[field_map["Real-world examples"]] = format_exampleSentences_html(note_data.get("exampleSentences"))
 
 
+def populate_math_note(editor, note_data):
+    note_data = normalize_math_note_data(note_data)
+    field_map = resolve_note_fields(editor.note, required_fields=MATH_CANONICAL_NOTE_FIELDS)
+    editor.note[field_map["Back"]] = format_math_back_html(note_data)
+
+
 def generate_note_data(vocab_word, notify=None):
     response = generate_vocab_note(vocab_word, notify=notify)
     if response is None:
@@ -791,6 +819,49 @@ def on_add_grammar_note(editor: Editor):
         finish(work())
 
 
+def on_add_math_note(editor: Editor):
+    math_input = clean_vocab_input(editor.note.fields[0])
+    if not math_input:
+        showInfo("No math input entered. Please enter a formula or question in the first field.")
+        return
+    try:
+        resolve_note_fields(editor.note, required_fields=MATH_CANONICAL_NOTE_FIELDS)
+    except MissingNoteFieldsError as error:
+        showInfo(str(error))
+        return
+
+    def work():
+        messages = []
+        note_data = generate_math_note_data(math_input, notify=messages.append)
+        return note_data, messages
+
+    def finish(result):
+        note_data, messages = result
+        for message in messages:
+            showInfo(message)
+        if note_data is None:
+            return
+        try:
+            populate_math_note(editor, note_data)
+            editor.loadNote()
+        except Exception as error:
+            showInfo(f"Error on math note: {error}")
+
+    taskman = getattr(mw, "taskman", None) if ANKI_AVAILABLE else None
+    if taskman is not None:
+        tooltip("VocBuilderAI: generating math card…")
+
+        def on_done(future):
+            try:
+                finish(future.result())
+            except Exception as error:
+                showInfo(f"Error on math note: {error}")
+
+        taskman.run_in_background(work, on_done, uses_collection=False)
+    else:
+        finish(work())
+
+
 def add_note_to_deck(deck_name, tag_name, note_data):  # pragma: no cover - requires a live Anki collection.
     if not ANKI_AVAILABLE:
         raise RuntimeError("Anki is required to add notes to a deck.")
@@ -861,6 +932,15 @@ GRAMMAR_BUTTON_ICON = _icon_file(
 )
 
 
+MATH_BUTTON_ICON = _icon_file(
+    "math.svg",
+    '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22">'
+    '<rect x="1" y="1" width="20" height="20" rx="5" fill="#7048b6"/>'
+    '<text x="11" y="16.5" font-family="sans-serif" font-size="13" font-weight="bold" '
+    'fill="#fff" text-anchor="middle">∑</text></svg>',
+)
+
+
 def add_action_button(buttons, editor: Editor):  # pragma: no cover - requires Anki editor UI.
     button = editor.addButton(
         icon=VOCAI_BUTTON_ICON,
@@ -881,6 +961,15 @@ def add_action_button(buttons, editor: Editor):  # pragma: no cover - requires A
         keys=None,
     )
     buttons.append(grammar_button)
+    math_button = editor.addButton(
+        icon=MATH_BUTTON_ICON,
+        label="∑" if not MATH_BUTTON_ICON else "",
+        cmd="generate_math_card",
+        func=lambda _, e=editor: on_add_math_note(e),
+        tip="VocBuilderAI: Generate the back of a math card for the entered formula or question (∑)",
+        keys=None,
+    )
+    buttons.append(math_button)
     return buttons
 
 

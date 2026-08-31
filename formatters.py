@@ -284,3 +284,26 @@ def format_relatedGrammar_html(relatedGrammar):
         html_content += f"<li>{html_text(item)}</li>"
     html_content += "</ul>"
     return html_content
+
+
+def format_math_text(value, fallback="N/A"):
+    """Escape math section text while keeping MathJax \\( \\) / \\[ \\] delimiters usable.
+
+    Newlines become <br> so multi-step calculations keep one step per line.
+    """
+    if value is None or not str(value).strip():
+        return fallback
+    return html.escape(str(value).strip(), quote=True).replace("\n", "<br>")
+
+
+def format_math_back_html(note_data):
+    note_data = as_dict(note_data)
+    sections = [
+        ("Explanation", note_data.get("explanation")),
+        ("Calculation", note_data.get("calculation")),
+        ("Example", note_data.get("example")),
+        ("Notes", note_data.get("notes")),
+    ]
+    return "<br>".join(
+        f"<h3>{title}:</h3><p>{format_math_text(value)}</p>" for title, value in sections
+    )

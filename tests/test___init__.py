@@ -1319,3 +1319,145 @@ def test_module_import_survives_icon_write_failure(monkeypatch, tmp_path):
 
     assert module.VOCAI_BUTTON_ICON == ""
     assert module.GRAMMAR_BUTTON_ICON == ""
+
+
+def test_math_prompt_contract():
+    assert "Return exactly one valid JSON object" in prompts.MATH_PROMPT
+    assert "\\( ... \\)" in prompts.MATH_PROMPT
+    assert "\\[ ... \\]" in prompts.MATH_PROMPT
+    assert "Traditional Chinese, not Simplified Chinese" in prompts.MATH_PROMPT
+    assert '"explanation"' in prompts.MATH_PROMPT
+    assert '"calculation"' in prompts.MATH_PROMPT
+    assert '"example"' in prompts.MATH_PROMPT
+    assert '"notes"' in prompts.MATH_PROMPT
+
+
+def test_normalize_math_note_data_maps_variants():
+    normalized = addon.normalize_math_note_data(
+        {"front": "E=mc^2", "derivation": "推導", "note": "備註"}
+    )
+
+    assert normalized == {
+        "front": "E=mc^2",
+        "explanation": "",
+        "calculation": "推導",
+        "example": "",
+        "notes": "備註",
+    }
+
+
+def test_format_math_back_html_keeps_mathjax_and_line_breaks():
+    html = addon.format_math_back_html(
+        {
+            "explanation": "質能等價 \\(E=mc^2\\)",
+            "calculation": "令 a=3, b=4\n則 c=5",
+            "example": "面積為 2 的正方形。",
+            "notes": "僅適用於直角三角形。",
+        }
+    )
+
+    assert "<h3>Explanation:</h3><p>質能等價 \\(E=mc^2\\)</p>" in html
+    assert "<h3>Calculation:</h3><p>令 a=3, b=4<br>則 c=5</p>" in html
+    assert "<h3>Example:</h3><p>面積為 2 的正方形。</p>" in html
+    assert "<h3>Notes:</h3><p>僅適用於直角三角形。</p>" in html
+
+
+def test_format_math_back_html_renders_empty_fallbacks():
+    html = addon.format_math_back_html({})
+
+    assert html.count("N/A") == 4
+
+
+def test_resolve_note_fields_matches_basic_note_fields():
+    class BasicNote(dict):
+        fields = ["\\(x^2\\)"]
+
+        def keys(self):
+            return ["Front", "Back"]
+
+    mapping = addon.resolve_note_fields(BasicNote(), required_fields=addon.MATH_CANONICAL_NOTE_FIELDS)
+
+    assert mapping == {"Front": "Front", "Back": "Back"}
+
+
+def test_generate_math_note_uses_math_prompt_and_separate_cache(monkeypatch):
+    captured = []
+
+    def fake_generate(word, system_prompt, retries=3, notify=None, cache_namespace=None):
+        captured.append(
+            {"word": word, "prompt": system_prompt, "cache_namespace": cache_namespace}
+        )
+        return "raw response"
+
+    monkeypatch.setattr(addon, "_generate_llm_content", fake_generate)
+
+    assert addon.generate_math_note("Pythagorean theorem") == "raw response"
+    assert captured[0]["prompt"] is prompts.MATH_PROMPT
+    assert captured[0]["cache_namespace"] == "math"
+
+
+def test_generate_math_note_data_parses_llm_json(monkeypatch):
+    monkeypatch.setattr(
+        addon, "generate_math_note", lambda text, notify=None: '{"front": "x^2", "explanation": "平方"}'
+    )
+
+    assert addon.generate_math_note_data("x^2") == {"front": "x^2", "explanation": "平方"}
+
+
+def test_on_add_math_note_populates_back_and_loads(monkeypatch):
+    editor = DummyEditor("\\(a^2 + b^2 = c^2\\)")
+    note_data = {
+        "front": "\\(a^2 + b^2 = c^2\\)",
+        "explanation": "畢氏定理說明直角三角形三邊的關係。",
+        "calculation": "令 a=3, b=4\n則 c=5",
+        "example": "3-4-5 直角三角形。",
+        "notes": "僅適用於直角三角形。",
+    }
+    monkeypatch.setattr(addon, "generate_math_note_data", lambda text, notify=None: note_data)
+
+    addon.on_add_math_note(editor)
+
+    assert editor.loaded is True
+    back = editor.note["Back"]
+    assert "<h3>Explanation:</h3>" in back
+    assert "畢氏定理" in back
+    assert "令 a=3, b=4<br>則 c=5" in back
+
+
+def test_on_add_math_note_handles_empty_input(monkeypatch):
+    messages = []
+    monkeypatch.setattr(addon, "showInfo", messages.append)
+    editor = DummyEditor("   ")
+
+    addon.on_add_math_note(editor)
+
+    assert messages == [
+        "No math input entered. Please enter a formula or question in the first field."
+    ]
+    assert editor.loaded is False
+
+
+def test_on_add_math_note_reports_missing_fields_before_api_call(monkeypatch):
+    messages = []
+    monkeypatch.setattr(addon, "showInfo", messages.append)
+
+    class IncompleteNote(dict):
+        fields = ["a question"]
+
+        def keys(self):
+            return ["Question", "Answer"]
+
+    class IncompleteEditor:
+        def __init__(self):
+            self.note = IncompleteNote()
+            self.loaded = False
+
+        def loadNote(self):
+            self.loaded = True
+
+    editor = IncompleteEditor()
+
+    addon.on_add_math_note(editor)
+
+    assert messages and "missing fields that VocBuilderAI writes" in messages[0]
+    assert editor.loaded is False

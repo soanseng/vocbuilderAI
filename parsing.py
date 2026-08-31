@@ -147,3 +147,14 @@ def normalize_japanese_grammar_data(grammar_data):
         "relatedGrammar": related_grammar,
         "exampleSentences": _normalize_japanese_examples(grammar_data.get("exampleSentences")),
     }
+
+
+def normalize_math_note_data(note_data):
+    note_data = as_dict(note_data)
+    return {
+        "front": note_data.get("front") or "",
+        "explanation": note_data.get("explanation") or "",
+        "calculation": note_data.get("calculation") or note_data.get("derivation") or "",
+        "example": note_data.get("example") or "",
+        "notes": note_data.get("notes") or note_data.get("note") or "",
+    }
