@@ -32,6 +32,23 @@ def as_list(value):
         return list(value)
     return [value]
 
+def repair_invalid_escapes(text: str) -> str:
+    """Fix backslashes that do not start a legal JSON escape sequence.
+
+    Math generation asks the LLM for LaTeX (\\( ... \\)), and models routinely emit
+    single backslashes inside JSON strings, which json.loads rejects as
+    "Invalid \\escape". Consume the text in backslash pairs: legal escapes
+    (including \\\\) are kept as-is; a lone backslash before any other character
+    is doubled so it decodes to a literal backslash.
+    """
+
+    def fix_pair(match):
+        pair = match.group(0)
+        if pair[1] in '"\\/bfnrtu':
+            return pair
+        return "\\\\" + pair[1]
+
+    return re.sub(r"\\.", fix_pair, text)
 
 def process_response(response: str, notify=None) -> dict:
     notify = notify or (lambda message: None)
@@ -42,9 +59,12 @@ def process_response(response: str, notify=None) -> dict:
     try:
         parsed = json.loads(cleaned_response)
     except json.JSONDecodeError as error:
-        preview = cleaned_response if len(cleaned_response) <= 500 else cleaned_response[:500] + "\n…(truncated)"
-        notify(f"Failed to parse note data: {error}\nContent: {preview}")
-        return {}
+        try:
+            parsed = json.loads(repair_invalid_escapes(cleaned_response))
+        except json.JSONDecodeError:
+            preview = cleaned_response if len(cleaned_response) <= 500 else cleaned_response[:500] + "\n…(truncated)"
+            notify(f"Failed to parse note data: {error}\nContent: {preview}")
+            return {}
     return parsed if isinstance(parsed, dict) else {}
 
 

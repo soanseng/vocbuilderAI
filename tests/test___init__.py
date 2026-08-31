@@ -264,6 +264,19 @@ def test_process_response_rejects_invalid_json(monkeypatch):
 def test_process_response_rejects_non_object_json():
     assert addon.process_response('["not", "an", "object"]') == {}
 
+def test_process_response_repairs_latex_escapes_in_math_json():
+    response = (
+        "{\"front\": \"How does the second derivative determine concavity?\", "
+        "\"explanation\": \"二階導數 \\( f''(x) \\) 描述了函數圖形的「彎曲方向」。\", "
+        "\"calculation\": \"考慮 \\( f(x) = x^2 \\\\)\\n\\[ f'(x) = 2x \\\\]\\n\\[ f''(x) = 2 \\\\]\", "
+        "\"example\": \"\", \"notes\": \"\"}"
+    )
+
+    note_data = addon.process_response(response)
+
+    assert note_data["explanation"] == "二階導數 \\( f''(x) \\) 描述了函數圖形的「彎曲方向」。"
+    assert note_data["calculation"] == "考慮 \\( f(x) = x^2 \\)\n\\[ f'(x) = 2x \\]\n\\[ f''(x) = 2 \\]"
+
 
 def test_small_helpers_normalize_values():
     assert addon.get_provider_defaults("missing") == addon.PROVIDER_DEFAULTS["openai"]
