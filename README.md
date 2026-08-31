@@ -27,6 +27,7 @@ Leave the model field blank to use VocBuilderAI's provider default. If Japanese 
 
 ### Features
 - Comprehensive vocabulary flashcards
+- Math flashcards with LaTeX formulas rendered through MathJax
 - Multiple LLM provider support, including custom OpenAI-compatible endpoints
 - Text-to-speech for pronunciation through OpenAI or custom OpenAI-compatible TTS
 - Settings health checks for API, Japanese JSON, and text-to-speech
@@ -130,11 +131,23 @@ To explain the grammar of a whole Japanese sentence, type the sentence in the fi
 
 For Japanese vocabulary, use the `Japanese` generation mode if you want more consistent readings, grammar, and Traditional Chinese translations.
 
-For math cards, use a note type with `Front` and `Back` fields (Anki's built-in `Basic` note type works). Paste a formula, question, or theorem name into `Front`, then click the `∑` button. It fills `Back` with a Traditional Chinese explanation, a step-by-step calculation or derivation, a worked example, and extra notes, keeping every formula in LaTeX for MathJax.
-
 ![screenshot1](media/screenshot-1.png)
 ![screenshot2](media/screenshot-2.png)
 ![screenshot3](media/screenshot-3.png)
+
+### Math Cards
+
+Use any note type with `Front` and `Back` fields — Anki's built-in `Basic` note type works.
+
+1. Open Anki's `Add` window and switch the note type to `Basic` (or any type with `Front` and `Back`).
+2. Paste a math formula, a question, or a theorem name into the `Front` field. LaTeX input is fine.
+3. Click the `∑` button in the editor toolbar.
+4. Review the generated `Back` field: a Traditional Chinese explanation, a step-by-step calculation or derivation, a worked example, and extra notes.
+5. Click `Add` to save the card.
+
+Every generated formula uses LaTeX — `\(...\)` for inline math and `\[...\]` for display math — which Anki renders with MathJax.
+
+![Math card example](media/math-card.png)
 
 ### Troubleshooting
 - `Unsupported parameter: max_tokens`: update to the latest add-on version. OpenAI uses `max_completion_tokens`.
@@ -165,6 +178,7 @@ Model 欄位留空時，VocBuilderAI 會使用該 provider 的預設模型。如
 
 ### 功能特點
 - 全面的單詞記憶卡片
+- 數學卡片，公式以 LaTeX（MathJax）呈現
 - 支援多個 LLM 供應商，包含自訂 OpenAI-compatible endpoint
 - 透過 OpenAI 或自訂 OpenAI-compatible TTS 產生文字轉語音發音
 - 設定頁可測試 API、日文 JSON 與文字轉語音
@@ -262,7 +276,19 @@ Model 欄位留空時，會使用 provider 的預設模型。
 
 若要解釋整個日語句子的文法，在第一個欄位輸入日文句子後改點 `文法` 按鈕。它會以同樣的 `vocbuilderAI` 欄位填入句子、假名讀音、繁中翻譯、逐項文法解析、相關句型與例句。
 
-數學卡片:使用有 `Front` 和 `Back` 欄位的 note type(Anki 內建的 `Basic` 即可)。在 `Front` 貼上公式、題目或定理名稱後點 `∑` 按鈕,它會在 `Back` 填入繁中解釋、逐步計算或推導、範例與補充說明,公式一律以 LaTeX(MathJax)格式呈現。
+### 數學卡片
+
+使用任何有 `Front` 和 `Back` 欄位的 note type（Anki 內建的 `Basic` 即可）。
+
+1. 打開 Anki 的 `Add` 視窗，把 note type 切換到 `Basic`（或任何有 `Front`、`Back` 欄位的類型）。
+2. 在 `Front` 貼上數學公式、題目或定理名稱，直接貼 LaTeX 也可以。
+3. 點 editor toolbar 裡的 `∑` 按鈕。
+4. 檢查自動生成的 `Back`：繁中解釋、逐步計算或推導、範例與補充說明。
+5. 點 `Add` 儲存卡片。
+
+生成的公式一律用 LaTeX（行內 `\(...\)`、獨立 `\[...\]`），Anki 會以 MathJax 渲染。
+
+![數學卡片範例](media/math-card.png)
 
 ### 疑難排解
 - `Unsupported parameter: max_tokens`：請更新到最新版 add-on。OpenAI 現在使用 `max_completion_tokens`。
