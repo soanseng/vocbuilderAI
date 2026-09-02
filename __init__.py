@@ -225,6 +225,18 @@ KOKORO_JAPANESE_VOICES = [
 ]
 KOKORO_TTS_MODEL = "speaches-ai/Kokoro-82M-v1.0-ONNX"
 KOKORO_LEGACY_ENGLISH_MODEL = "csukuangfj/kokoro-en-v0_19"
+QWEN_TTS_MODEL = "qwen-tts"
+QWEN_TTS_VOICES = [
+    "Vivian",
+    "Serena",
+    "Uncle_Fu",
+    "Dylan",
+    "Eric",
+    "Ryan",
+    "Aiden",
+    "Ono_Anna",
+    "Sohee",
+]
 
 
 def is_japanese_vocab(vocab_word):
@@ -486,9 +498,9 @@ def speech_file_extension(response_format):
 
 
 def speech_settings(input_text=""):
-    provider = config.get("speech_provider", "openai")
-    if provider not in {"openai", "custom"}:
-        provider = "openai"
+    provider = config.get("speech_provider", CONFIG_DEFAULTS["speech_provider"])
+    if provider not in {"openai", "custom", "qwen"}:
+        provider = CONFIG_DEFAULTS["speech_provider"]
     is_japanese_text = is_japanese_vocab(input_text)
 
     if provider == "custom":
@@ -507,6 +519,21 @@ def speech_settings(input_text=""):
         else:
             voices = KOKORO_AMERICAN_VOICES
             random_pool = KOKORO_RANDOM_AMERICAN_VOICES
+    elif provider == "qwen":
+        # Qwen3-TTS is served by the same LiteLLM proxy as chat, so it shares
+        # custom_base_url/custom_api_key. speech_api_key is deliberately not
+        # used: a stale key from a previous speech provider would silently 401.
+        api_key = normalize_api_key(config.get("custom_api_key"))
+        base_url = (config.get("custom_base_url") or "").strip() or CONFIG_DEFAULTS["custom_base_url"]
+        configured_model = config.get("speech_model")
+        model = (
+            QWEN_TTS_MODEL
+            if configured_model in {"", "gpt-4o-mini-tts", KOKORO_TTS_MODEL, KOKORO_LEGACY_ENGLISH_MODEL, None}
+            else configured_model
+        )
+        response_format = config.get("speech_response_format") or "wav"
+        voices = QWEN_TTS_VOICES
+        random_pool = QWEN_TTS_VOICES
     else:
         api_key = normalize_api_key(config.get("speech_api_key")) or normalize_api_key(config.get("openai_api_key"))
         base_url = "https://api.openai.com/v1"
@@ -543,6 +570,9 @@ def fetch_speech_audio(vocab_word, retries=3, notify=None, settings=None):
     if provider == "custom":
         payload["response_format"] = response_format
         payload["sample_rate"] = int(config.get("speech_sample_rate", 24000))
+    elif provider == "qwen":
+        payload["response_format"] = response_format
+        payload["speed"] = float(config.get("speech_speed", 1.0))
     else:
         payload["instructions"] = "Speak clearly and naturally. Use Japanese pronunciation for Japanese text."
         payload["speed"] = float(config.get("speech_speed", 1.0))
@@ -1090,12 +1120,12 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             self.tabs.addTab(anki_tab, "Anki")
 
             self.speech_provider = QComboBox()
-            self.speech_provider.addItems(["openai", "custom"])
+            self.speech_provider.addItems(["qwen", "openai", "custom"])
             self.speech_provider.currentTextChanged.connect(self.update_speech_hints)
             self.speech_key = self.api_key_input()
             self.speech_base_url = QLineEdit()
             self.speech_voice = QComboBox()
-            self.speech_voice.addItems([""] + OPENAI_TTS_VOICES + KOKORO_AMERICAN_VOICES)
+            self.speech_voice.addItems([""] + QWEN_TTS_VOICES + OPENAI_TTS_VOICES + KOKORO_AMERICAN_VOICES)
             self.speech_model = QLineEdit()
             self.speech_response_format = QComboBox()
             self.speech_response_format.addItems(["", "mp3", "wav", "opus", "aac", "flac", "pcm"])
@@ -1154,12 +1184,22 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
         def update_speech_hints(self):
             if not hasattr(self, "speech_base_url"):
                 return
-            is_custom = self.speech_provider.currentText() == "custom"
+            provider = self.speech_provider.currentText()
+            is_custom = provider == "custom"
+            is_qwen = provider == "qwen"
+            self.speech_key.setEnabled(not is_qwen)
             self.speech_base_url.setEnabled(is_custom)
             self.speech_sample_rate.setEnabled(is_custom)
             self.speech_speed.setEnabled(not is_custom)
             self.speech_model.setPlaceholderText(
-                KOKORO_TTS_MODEL if is_custom else "gpt-4o-mini-tts"
+                KOKORO_TTS_MODEL
+                if is_custom
+                else QWEN_TTS_MODEL
+                if is_qwen
+                else "gpt-4o-mini-tts"
+            )
+            self.speech_base_url.setPlaceholderText(
+                CONFIG_DEFAULTS["custom_base_url"] if is_qwen else CONFIG_DEFAULTS["speech_base_url"]
             )
 
         def apply_default_model(self):
@@ -1250,7 +1290,7 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             self.model.setText(config.get("model", ""))
             self.temperature.setValue(float(config.get("temperature", 0.5)))
             self.max_tokens.setValue(float(config.get("max_tokens", 15000)))
-            self.speech_provider.setCurrentText(config.get("speech_provider", "openai"))
+            self.speech_provider.setCurrentText(config.get("speech_provider", CONFIG_DEFAULTS["speech_provider"]))
             self.speech_key.setText(config.get("speech_api_key", ""))
             self.speech_base_url.setText(config.get("speech_base_url", ""))
             self.speech_voice.setCurrentText(config.get("speech_voice", ""))

@@ -682,6 +682,82 @@ def test_custom_speech_japanese_uses_multilingual_model_and_japanese_voice(monke
     assert response_format == "wav"
 
 
+def test_generate_speech_uses_qwen_litellm_tts(monkeypatch, tmp_path):
+    added_files = []
+    monkeypatch.setitem(addon.config, "speech_provider", "qwen")
+    monkeypatch.setitem(addon.config, "speech_api_key", "stale-speaches-key")
+    monkeypatch.setitem(addon.config, "custom_api_key", "litellm-key")
+    monkeypatch.setitem(addon.config, "custom_base_url", "http://your-litellm-server:4000/v1")
+    monkeypatch.setitem(addon.config, "speech_voice", "Vivian")
+    monkeypatch.setitem(addon.config, "speech_model", "gpt-4o-mini-tts")
+    monkeypatch.setitem(addon.config, "speech_speed", 1.25)
+    monkeypatch.setattr(addon, "__file__", str(tmp_path / "__init__.py"))
+    monkeypatch.setattr(addon, "mw", SimpleNamespace(col=SimpleNamespace(media=SimpleNamespace(addFile=lambda path: added_files.append(path.name) or "qwen.wav"))))
+
+    class Response:
+        content = b"wav"
+
+        def raise_for_status(self):
+            return None
+
+    captured = {}
+
+    def fake_post(url, headers, json, timeout):
+        captured.update({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr(addon.requests, "post", fake_post)
+
+    assert addon.generate_speech("apple", retries=1) == "qwen.wav"
+    assert added_files[0].endswith(".wav")
+    assert captured["url"] == "http://your-litellm-server:4000/v1/audio/speech"
+    # The stale speech_api_key must be ignored; qwen rides the chat LiteLLM key.
+    assert captured["headers"]["Authorization"] == "Bearer litellm-key"
+    assert captured["json"] == {
+        "model": "qwen-tts",
+        "voice": "Vivian",
+        "input": "apple",
+        "response_format": "wav",
+        "speed": 1.25,
+    }
+
+
+def test_qwen_speech_random_voice_from_qwen_list(monkeypatch):
+    monkeypatch.setitem(addon.config, "speech_provider", "qwen")
+    monkeypatch.setitem(addon.config, "custom_api_key", "litellm-key")
+    monkeypatch.setitem(addon.config, "speech_voice", "")
+    monkeypatch.setattr(addon.random, "choice", lambda choices: choices[0])
+
+    provider, api_key, url, model, voice, response_format = addon.speech_settings()
+
+    assert provider == "qwen"
+    assert api_key == "litellm-key"
+    assert voice == "Vivian"
+    assert voice in addon.QWEN_TTS_VOICES
+    assert model == "qwen-tts"
+    assert response_format == "wav"
+    assert url.endswith("/audio/speech")
+
+
+def test_qwen_speech_falls_back_to_custom_base_default(monkeypatch):
+    monkeypatch.setitem(addon.config, "speech_provider", "qwen")
+    monkeypatch.setitem(addon.config, "custom_api_key", "litellm-key")
+    monkeypatch.setitem(addon.config, "custom_base_url", "")
+    monkeypatch.setitem(addon.config, "speech_voice", "Serena")
+    monkeypatch.setitem(addon.config, "speech_model", "speaches-ai/Kokoro-82M-v1.0-ONNX")
+
+    _provider, _api_key, url, model, voice, _fmt = addon.speech_settings("近い")
+
+    assert url == addon.CONFIG_DEFAULTS["custom_base_url"].rstrip("/") + "/audio/speech"
+    assert model == "qwen-tts"
+    assert voice == "Serena"
+
+
+def test_migrate_config_keeps_qwen_speech_provider():
+    migrated = addon.migrate_config({"speech_provider": "qwen"})
+
+    assert migrated["speech_provider"] == "qwen"
+
 def test_on_add_note_populates_english_and_loads(monkeypatch):
     editor = DummyEditor("apple")
     payload = {
@@ -817,7 +893,7 @@ def test_config_migration_recovers_from_removed_provider_and_fields():
     assert migrated["model"] == ""
     assert migrated["max_tokens"] == addon.CONFIG_DEFAULTS["max_tokens"]
     assert migrated["temperature"] == addon.CONFIG_DEFAULTS["temperature"]
-    assert migrated["speech_provider"] == "openai"
+    assert migrated["speech_provider"] == addon.CONFIG_DEFAULTS["speech_provider"]
     assert migrated["speech_sample_rate"] == addon.CONFIG_DEFAULTS["speech_sample_rate"]
     assert migrated["speech_speed"] == addon.CONFIG_DEFAULTS["speech_speed"]
     assert migrated["generation_mode"] == "standard"

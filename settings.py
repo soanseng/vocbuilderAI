@@ -12,7 +12,7 @@ CONFIG_DEFAULTS = {
     "model": "",
     "max_tokens": 4096,
     "temperature": 0.5,
-    "speech_provider": "openai",
+    "speech_provider": "qwen",
     "speech_api_key": "your-speech-key",
     "speech_base_url": "http://your-tts-server:8001/v1",
     "speech_voice": "",
@@ -127,7 +127,7 @@ def migrate_config(raw_config=None):
     migrated["custom_base_url"] = (migrated.get("custom_base_url") or CONFIG_DEFAULTS["custom_base_url"]).strip()
     migrated["custom_supports_response_format"] = bool(migrated.get("custom_supports_response_format", False))
     migrated["custom_disable_thinking"] = bool(migrated.get("custom_disable_thinking", True))
-    if migrated.get("speech_provider") not in {"openai", "custom"}:
+    if migrated.get("speech_provider") not in {"openai", "custom", "qwen"}:
         migrated["speech_provider"] = CONFIG_DEFAULTS["speech_provider"]
     migrated["speech_base_url"] = (migrated.get("speech_base_url") or CONFIG_DEFAULTS["speech_base_url"]).strip()
     migrated["speech_response_format"] = (

@@ -82,7 +82,7 @@ Open `Tools -> VocBuilderAI Settings` and configure these tabs:
 - `Generation`: choose OpenAI, Groq, OpenRouter, or Custom; choose a generation mode; set model, temperature, max tokens, and cache behavior.
 - `API Keys`: enter the API key for the provider you want to use.
 - `Anki`: set the default deck, tag, and note type.
-- `Speech`: set OpenAI speech or custom OpenAI-compatible TTS, including model, voice, format, and speed.
+- `Speech`: set the speech provider — Qwen3-TTS via LiteLLM (`qwen`, the default), OpenAI, or a custom OpenAI-compatible TTS — including model, voice, format, and speed.
 
 Generation modes:
 
@@ -100,6 +100,13 @@ For a self-hosted LiteLLM service, choose `custom`, set the custom base URL to y
 - `qwen36-35b-heretic`
 
 Keep `Disable Qwen thinking` enabled for these models. It sends the vLLM/LiteLLM `enable_thinking=false` option so the add-on receives final JSON in `message.content`.
+
+For Qwen3-TTS, keep `Speech -> Provider` on `qwen` (the default). Audio routes through the LiteLLM proxy configured for chat under `custom` (same base URL and `custom_api_key`), so no extra keys are needed:
+
+- Model: `qwen-tts`
+- Format: `wav` (24 kHz)
+- Voice: leave blank to rotate multilingual voices automatically, or pin one: Vivian, Serena, Uncle_Fu, Dylan, Eric, Ryan, Aiden, Ono_Anna, Sohee
+- Speed: set in the `Speed` field (0.25-4.0)
 
 For a self-hosted Kokoro TTS (Speaches) service, set `Speech -> Provider` to `custom`, set the custom base URL to your endpoint (for example `http://your-tts-server:8001/v1`), and use:
 
@@ -227,7 +234,7 @@ ln -sf "$PWD/formatters.py" ~/.local/share/Anki2/addons21/voc_builder_ai/formatt
 - `Generation`：選擇 OpenAI、Groq、OpenRouter 或 Custom；設定生成模式、model、temperature、max tokens 和快取。
 - `API Keys`：填入你要使用的 provider API key。
 - `Anki`：設定預設 deck、tag 和 note type。
-- `Speech`：設定 OpenAI 或自訂 OpenAI-compatible TTS，包含 model、voice、format 和 speed。
+- `Speech`：設定 Qwen3-TTS（LiteLLM，預設 `qwen`）、OpenAI 或自訂 OpenAI-compatible TTS，包含 model、voice、format 和 speed。
 
 生成模式：
 
@@ -245,6 +252,13 @@ Model 欄位留空時，會使用 provider 的預設模型。
 - `qwen36-35b-heretic`
 
 這幾個模型建議保持 `Disable Qwen thinking` 開啟。它會送出 vLLM/LiteLLM 的 `enable_thinking=false` 選項，讓 add-on 可以在 `message.content` 收到最終 JSON。
+
+Qwen3-TTS 保持 `Speech -> Provider` 為 `qwen`（預設）。語音會走 Chat 設定裡 `custom` 的 LiteLLM proxy（共用 custom base URL 和 `custom_api_key`），不需要額外金鑰：
+
+- Model：`qwen-tts`
+- Format：`wav`（24 kHz）
+- Voice：留空自動輪播多語言聲音，或指定：Vivian、Serena、Uncle_Fu、Dylan、Eric、Ryan、Aiden、Ono_Anna、Sohee
+- Speed：用 `Speed` 欄位設定（0.25-4.0）
 
 自架 Kokoro TTS（Speaches）服務可在 `Speech -> Provider` 選 `custom`，custom base URL 設成你的 endpoint（例如 `http://your-tts-server:8001/v1`），並使用：
 

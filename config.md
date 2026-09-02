@@ -13,7 +13,7 @@
     "model": "",
     "max_tokens": 15000,
     "temperature": 0.5,
-    "speech_provider": "openai",
+    "speech_provider": "qwen",
     "speech_api_key": "your-speech-key",
     "speech_base_url": "http://your-tts-server:8001/v1",
     "speech_voice": "",
@@ -48,11 +48,11 @@
 - note_type: Note type for new notes
 - max_tokens: Maximum number of tokens to generate
 - temperature: Controls randomness (0.0-1.0). Lower = more deterministic
-- speech_provider: Speech provider to use (`openai` or `custom`)
-- speech_api_key: Optional speech-only API key. For OpenAI speech, leave this blank/placeholder to reuse `openai_api_key`. For GB10 Kokoro TTS, set this to the Speaches API key.
-- speech_base_url: Base URL for custom OpenAI-compatible TTS, for example a self-hosted Speaches/Kokoro service (`http://your-tts-server:8001/v1`)
-- speech_voice: Voice for speech synthesis (empty for random). GB10 Kokoro random voices use the American `af_*` and `am_*` voice list.
-- speech_model: Speech model. For GB10 Kokoro TTS with English and Japanese voices, use `speaches-ai/Kokoro-82M-v1.0-ONNX`
-- speech_response_format: Audio format. Leave blank for provider default (`mp3` for OpenAI, `wav` for GB10 Kokoro TTS).
+- speech_provider: Speech provider to use (`qwen`, `openai`, or `custom`). `qwen` is the default.
+- speech_api_key: Optional speech-only API key, used by `openai` and `custom` providers. For OpenAI speech, leave this blank/placeholder to reuse `openai_api_key`. For GB10 Kokoro TTS, set this to the Speaches API key. Unused by `qwen`, which reuses `custom_api_key`.
+- speech_base_url: Base URL for custom OpenAI-compatible TTS, for example a self-hosted Speaches/Kokoro service (`http://your-tts-server:8001/v1`). Unused by `qwen`, which routes through the LiteLLM proxy from the Chat settings (`custom_base_url`).
+- speech_voice: Voice for speech synthesis (empty for random). `qwen` voices are multilingual (zh-TW/en/ja/中英夾雜, 24 kHz): Vivian, Serena, Uncle_Fu, Dylan, Eric, Ryan, Aiden, Ono_Anna, Sohee. GB10 Kokoro random voices use the American `af_*` and `am_*` voice list.
+- speech_model: Speech model. For `qwen`, use `qwen-tts` (legacy names such as `gpt-4o-mini-tts` or the Kokoro models fall back to `qwen-tts`). For GB10 Kokoro TTS with English and Japanese voices, use `speaches-ai/Kokoro-82M-v1.0-ONNX`
+- speech_response_format: Audio format. Leave blank for provider default (`mp3` for OpenAI, `wav` for `qwen` and GB10 Kokoro TTS).
 - speech_sample_rate: Sample rate for custom TTS, default 24000
-- speech_speed: Speech speed (0.25-4.0, default 1.0)
+- speech_speed: Speech speed (0.25-4.0, default 1.0). Applied by `openai` and `qwen`; ignored by `custom`
