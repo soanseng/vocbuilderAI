@@ -37,7 +37,7 @@ try:  # pragma: no cover - exercised by Anki, not by headless tests.
         html_text,
         join_values,
     )
-    from .llm import build_chat_payload, chat_completions_url, extract_chat_content, should_retry_status
+    from .llm import build_chat_payload, chat_completions_url, chat_truncated, extract_chat_content, should_retry_status
     from .llm import health_check as provider_health_check
     from .llm import llm_api_request as perform_llm_api_request
     from .parsing import clean_response, normalize_english_note_data, normalize_japanese_grammar_data, normalize_japanese_note_data, normalize_math_note_data
@@ -82,7 +82,7 @@ except ImportError:
         html_text,
         join_values,
     )
-    from llm import build_chat_payload, chat_completions_url, extract_chat_content, should_retry_status
+    from llm import build_chat_payload, chat_completions_url, chat_truncated, extract_chat_content, should_retry_status
     from llm import health_check as provider_health_check
     from llm import llm_api_request as perform_llm_api_request
     from parsing import clean_response, normalize_english_note_data, normalize_japanese_grammar_data, normalize_japanese_note_data, normalize_math_note_data
@@ -388,6 +388,11 @@ def _generate_llm_content(vocab_word, system_prompt, retries=3, notify=None, cac
 
     try:
         content = extract_chat_content(response)
+        if chat_truncated(response):
+            notify(
+                "LLM output was cut off at the token limit, so the response is likely incomplete. "
+                "Raise 'Max tokens' in VocBuilderAI Settings and try again."
+            )
         set_cached_generation(cache_key, content)
         return content
     except (KeyError, IndexError, TypeError, ValueError) as error:
@@ -1050,7 +1055,7 @@ if ANKI_AVAILABLE:  # pragma: no cover - Qt settings UI requires Anki runtime.
             self.temperature.setDecimals(2)
 
             self.max_tokens = QDoubleSpinBox()
-            self.max_tokens.setRange(512, 32000)
+            self.max_tokens.setRange(512, 128000)
             self.max_tokens.setSingleStep(512)
             self.max_tokens.setDecimals(0)
 

@@ -278,6 +278,24 @@ def test_process_response_repairs_latex_escapes_in_math_json():
     assert note_data["calculation"] == "考慮 \\( f(x) = x^2 \\)\n\\[ f'(x) = 2x \\]\n\\[ f''(x) = 2 \\]"
 
 
+def test_chat_truncated_detects_length_finish_reason():
+    class Response:
+        def json(self):
+            return {"choices": [{"message": {"content": "hi"}, "finish_reason": "length"}]}
+
+    class CompleteResponse:
+        def json(self):
+            return {"choices": [{"message": {"content": "hi"}, "finish_reason": "stop"}]}
+
+    class BrokenResponse:
+        def json(self):
+            raise ValueError("not json")
+
+    assert addon.chat_truncated(Response()) is True
+    assert addon.chat_truncated(CompleteResponse()) is False
+    assert addon.chat_truncated(BrokenResponse()) is False
+
+
 def test_small_helpers_normalize_values():
     assert addon.get_provider_defaults("missing") == addon.PROVIDER_DEFAULTS["openai"]
     assert addon.normalize_api_key(" your-real-key ") == "your-real-key"

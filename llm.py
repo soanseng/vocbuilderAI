@@ -162,6 +162,14 @@ def extract_chat_content(response):
     return response_json["choices"][0]["message"]["content"]
 
 
+def chat_truncated(response):
+    """True when the provider cut the completion at the token limit."""
+    try:
+        return response.json()["choices"][0].get("finish_reason") == "length"
+    except (KeyError, IndexError, TypeError, ValueError):
+        return False
+
+
 def selected_provider(addon_config):
     provider = addon_config.get("provider", "openai")
     if provider not in {"openai", "groq", "openrouter", "custom"}:
