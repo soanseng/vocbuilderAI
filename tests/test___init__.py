@@ -278,6 +278,125 @@ def test_process_response_repairs_latex_escapes_in_math_json():
     assert note_data["calculation"] == "考慮 \\( f(x) = x^2 \\)\n\\[ f'(x) = 2x \\]\n\\[ f''(x) = 2 \\]"
 
 
+def test_process_response_repairs_missing_comma_between_members():
+    response = (
+        "{\n"
+        '  "word": "punctilio",\n'
+        '  "meanings": {\n'
+        '    "english": "A minor point of etiquette, formality, or propriety.",\n'
+        '    "traditionalChinese": "禮儀細節；繁文縟節。"\n'
+        "  },\n"
+        '  "definitions": [\n'
+        "    {\n"
+        '      "text": "A small point of behavior.",\n'
+        '      "grammaticalInfo": {\n'
+        '        "partOfSpeech": "noun"\n'
+        "      }\n"
+        "    }\n"
+        "  ]\n"
+        '  "pronunciation": "pungk-TIL-ee-oh",\n'
+        '  "etymology": "From Italian puntiglio."\n'
+        "}"
+    )
+
+    note_data = addon.process_response(response)
+
+    assert note_data["word"] == "punctilio"
+    assert note_data["meanings"]["traditionalChinese"] == "禮儀細節；繁文縟節。"
+    assert note_data["pronunciation"] == "pungk-TIL-ee-oh"
+    assert note_data["etymology"] == "From Italian puntiglio."
+
+
+def test_process_response_repairs_truncated_json():
+    response = '{"word": "punctilio", "meanings": {"english": "A minor point of etiquette'
+
+    note_data = addon.process_response(response)
+
+    assert note_data == {"word": "punctilio", "meanings": {"english": "A minor point of etiquette"}}
+
+
+def test_process_response_repairs_truncated_dangling_key():
+    response = '{"word": "apple", "meanings"'
+
+    assert addon.process_response(response) == {"word": "apple"}
+
+
+def test_process_response_repairs_trailing_commas():
+    response = '{"word": "apple", "synonyms": ["keen", "sharp",],}'
+
+    assert addon.process_response(response) == {"word": "apple", "synonyms": ["keen", "sharp"]}
+
+
+def test_process_response_repairs_literal_newline_inside_string():
+    response = '{\n  "word": "apple",\n  "etymology": "from Old English\nappel"\n}'
+
+    note_data = addon.process_response(response)
+
+    assert note_data["etymology"] == "from Old English\nappel"
+
+
+def test_process_response_repairs_other_control_characters_inside_string():
+    response = (
+        "{\n"
+        '  "sentence": "ようやく",\n'
+        '  "grammarPoints": [\n'
+        "    {\n"
+        '      "notes": "1. 帶有「不容易才做到」的語氣。\\n2. 常與「〜した」等表示結果的詞搭配。'
+        "\x0b3. 同義詞：ついに（終於）。\"\n"
+        "    }\n"
+        "  ]\n"
+        "}"
+    )
+
+    note_data = addon.process_response(response)
+
+    assert note_data["grammarPoints"][0]["notes"] == (
+        "1. 帶有「不容易才做到」的語氣。\n2. 常與「〜した」等表示結果的詞搭配。\x0b3. 同義詞：ついに（終於）。"
+    )
+
+
+def test_process_response_still_rejects_prose_without_json(monkeypatch):
+    messages = []
+    monkeypatch.setattr(addon, "showInfo", messages.append)
+
+    assert addon.process_response("Sure! Here is your note: it is a great word.") == {}
+    assert messages[0].startswith("Failed to parse note data:")
+
+
+def test_process_response_repairs_missing_comma_between_nested_containers():
+    response = '{"word": "apple", "meanings": {"english": "fruit"} "definitions": []}'
+
+    assert addon.process_response(response) == {"word": "apple", "meanings": {"english": "fruit"}, "definitions": []}
+
+
+def test_process_response_repairs_missing_comma_between_array_objects():
+    response = (
+        '{"word": "apple", "definitions": ['
+        '{"text": "fruit"} {"text": "tree"}'
+        "]}"
+    )
+
+    note_data = addon.process_response(response)
+
+    assert note_data["definitions"] == [{"text": "fruit"}, {"text": "tree"}]
+
+
+def test_process_response_repairs_number_split_after_missing_comma():
+    response = '{"word": "apple", "counts": [1 200]}'
+
+    assert addon.process_response(response) == {"word": "apple", "counts": [1, 200]}
+
+
+def test_parse_failure_message_shows_error_context(monkeypatch):
+    messages = []
+    monkeypatch.setattr(addon, "showInfo", messages.append)
+    response = '{"a": 1, "b": "x" garbage}'
+
+    assert addon.process_response(response) == {}
+    assert "Context:" in messages[0]
+    assert "garbage" in messages[0]
+
+
 def test_chat_truncated_detects_length_finish_reason():
     class Response:
         def json(self):

@@ -50,22 +50,207 @@ def repair_invalid_escapes(text: str) -> str:
 
     return re.sub(r"\\.", fix_pair, text)
 
+def repair_json_syntax(text: str) -> str:
+    """Structurally repair near-valid JSON objects emitted by LLMs.
+
+    Models behind custom providers occasionally emit JSON that is complete in
+    content but invalid in syntax: a missing comma between members, a trailing
+    comma, literal control characters inside a string, or output cut off
+    mid-object. Walk the text once and rebuild it with only those structural
+    problems fixed; content is never invented, reordered, or dropped beyond a
+    dangling partial member at the point of truncation.
+    """
+    start = text.find("{")
+    if start == -1:
+        return text
+    source = text[start:]
+
+    literal_controls = {chr(code): f"\\u{code:04x}" for code in range(0x20)}
+    literal_controls.update({"\n": "\\n", "\r": "\\r", "\t": "\\t"})
+    out = []
+    stack = []
+    # state: "member" (object key or closer expected), "value" (value expected),
+    # "key" (inside a key string), "colon" (after key, colon expected),
+    # "value_done" (comma or closer expected next).
+    state = "member"
+    in_string = False
+    in_literal = False
+    member_start = None  # index in out where the current member's key opens
+
+    def drop_dangling_member():
+        nonlocal member_start, state
+        if member_start is not None:
+            del out[member_start:]
+            member_start = None
+        state = "value_done"
+
+    def drop_trailing_comma():
+        while out and out[-1].isspace():
+            out.pop()
+        if out and out[-1] == ",":
+            out.pop()
+
+    i = 0
+    length = len(source)
+    while i < length:
+        ch = source[i]
+        if not stack and state == "value_done" and not in_string and not in_literal:
+            break  # top-level value already closed; ignore trailing content
+        if in_string:
+            if ch == "\\":
+                if i + 1 < length:
+                    out.append(source[i : i + 2])
+                    i += 2
+                else:
+                    out.append("\\\\")  # dangling backslash must not escape the closer
+                    i += 1
+                continue
+            if ch == '"':
+                in_string = False
+                state = "colon" if state == "key" else "value_done"
+                out.append(ch)
+            elif ch in literal_controls:
+                out.append(literal_controls[ch])
+            else:
+                out.append(ch)
+            i += 1
+            continue
+
+        if ch == '"':
+            if in_literal or state == "value_done":
+                out.append(",")  # missing comma between members
+                in_literal = False
+            if stack and stack[-1] == "{" and state in ("member", "value_done"):
+                state = "key"
+                member_start = len(out)
+            else:
+                state = "value"
+            in_string = True
+            out.append(ch)
+            i += 1
+            continue
+
+        if ch in "{[":
+            if in_literal:
+                in_literal = False
+                state = "value_done"
+            if state == "value_done":
+                out.append(",")  # missing comma between members
+            stack.append("{" if ch == "{" else "[")
+            state = "member" if ch == "{" else "value"
+            out.append(ch)
+            i += 1
+            continue
+
+        if in_literal and ch not in ",}]" and not ch.isspace():
+            out.append(ch)
+            i += 1
+            continue
+
+        if ch == ",":
+            if in_literal:
+                in_literal = False
+                state = "value_done"
+            if state == "value_done":
+                out.append(ch)
+                state = "member" if stack and stack[-1] == "{" else "value"
+            elif state == "colon":
+                drop_dangling_member()  # "key", -> drop the key, keep earlier comma
+            i += 1
+            continue
+
+        if ch in "}]":
+            if in_literal:
+                in_literal = False
+                state = "value_done"
+            if state == "colon":
+                drop_dangling_member()
+            if not stack:
+                break
+            if state in ("member", "value"):
+                drop_trailing_comma()
+            out.append("}" if stack.pop() == "{" else "]")
+            state = "value_done"
+            i += 1
+            continue
+
+        if ch == ":":
+            if state == "colon":
+                state = "value"
+                out.append(ch)
+            elif state == "value" or in_literal:
+                pass  # stray or duplicate colon
+            else:
+                out.append(ch)
+            i += 1
+            continue
+
+        if ch.isspace():
+            if in_literal:
+                in_literal = False
+                state = "value_done"
+            out.append(ch)
+            i += 1
+            continue
+
+        # bare token: number, true/false/null, or stray text
+        if state == "value_done":
+            out.append(",")  # missing comma between members
+        in_literal = True
+        state = "value"
+        out.append(ch)
+        i += 1
+
+    if in_string:
+        out.append('"')
+        state = "colon" if state == "key" else "value_done"
+    if in_literal:
+        state = "value_done"
+    if state == "colon":
+        drop_dangling_member()
+    drop_trailing_comma()
+    while stack:
+        out.append("}" if stack.pop() == "{" else "]")
+    return "".join(out)
+
 def process_response(response: str, notify=None) -> dict:
     notify = notify or (lambda message: None)
     cleaned_response = clean_response(response)
     if not cleaned_response:
         notify("No note data was returned by the LLM.")
         return {}
-    try:
-        parsed = json.loads(cleaned_response)
-    except json.JSONDecodeError as error:
+    raw_response = str(response).strip()
+    candidates = [
+        cleaned_response,
+        repair_invalid_escapes(cleaned_response),
+        repair_json_syntax(cleaned_response),
+        repair_json_syntax(repair_invalid_escapes(cleaned_response)),
+    ]
+    if raw_response and raw_response != cleaned_response:
+        # Without fences clean_response slices up to the last "}", which cuts
+        # truncated output early; the state machine can recover past it.
+        candidates.append(repair_json_syntax(raw_response))
+        candidates.append(repair_json_syntax(repair_invalid_escapes(raw_response)))
+    error = None
+    for candidate in candidates:
         try:
-            parsed = json.loads(repair_invalid_escapes(cleaned_response))
-        except json.JSONDecodeError:
-            preview = cleaned_response if len(cleaned_response) <= 500 else cleaned_response[:500] + "\n…(truncated)"
-            notify(f"Failed to parse note data: {error}\nContent: {preview}")
-            return {}
-    return parsed if isinstance(parsed, dict) else {}
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError as parse_error:
+            error = error or parse_error
+            continue
+        return parsed if isinstance(parsed, dict) else {}
+    preview = cleaned_response if len(cleaned_response) <= 500 else cleaned_response[:500] + "\n…(truncated)"
+    context = ""
+    pos = getattr(error, "pos", None) if error is not None else None
+    if isinstance(pos, int):
+        lo = max(0, pos - 120)
+        hi = min(len(cleaned_response), pos + 120)
+        window = cleaned_response[lo:hi]
+        prefix = "…" if lo > 0 else ""
+        suffix = "…" if hi < len(cleaned_response) else ""
+        context = f"\nContext: {prefix}{window}{suffix}"
+    notify(f"Failed to parse note data: {error}{context}\nContent: {preview}")
+    return {}
 
 
 def normalize_english_note_data(note_data):
